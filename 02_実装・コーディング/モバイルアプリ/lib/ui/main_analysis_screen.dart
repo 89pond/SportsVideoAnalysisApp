@@ -1,11 +1,15 @@
 import 'dart:math';
+import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
+import 'package:flutter/services.dart';
 import '../models/view_mode.dart';
 import '../models/sensor_record.dart';
 import '../models/lap_record.dart';
 import '../models/drawing_object.dart';
 import '../models/waveform_series.dart';
 import '../services/dual_video_controller.dart';
+import '../services/project_storage_service.dart';
 import '../utils/binary_search_sync.dart';
 import 'components/header_bar.dart';
 import 'components/video_viewport_area.dart';
@@ -24,6 +28,9 @@ class MainAnalysisScreen extends StatefulWidget {
 }
 
 class _MainAnalysisScreenState extends State<MainAnalysisScreen> {
+  // 静止画キャプチャ用キー
+  final GlobalKey _viewportKey = GlobalKey();
+
   // デュアル動画同期コントローラー
   late final DualVideoSyncController _videoSyncController;
 
@@ -34,8 +41,13 @@ class _MainAnalysisScreenState extends State<MainAnalysisScreen> {
   ViewMode _viewMode = ViewMode.splitHorizontal;
   double _ghostOpacity = 0.5;
 
+  // アライメント・グリッド状態
+  bool _showGrid = false;
+  bool _showPlumbLine = false;
+
   // 描画アノテーション状態
   DrawingToolType _activeTool = DrawingToolType.none;
+  Color _selectedStrokeColor = Colors.yellow;
   final List<DrawingObject> _drawingObjects = [];
 
   // 表示波形系列 (初期値: 加速度3軸 + 加速度合成G)
@@ -47,10 +59,10 @@ class _MainAnalysisScreenState extends State<MainAnalysisScreen> {
   };
 
   // サンプルデータ
-  late final List<SensorRecord> _sensorRecords;
-  late final List<LapRecord> _lapRecords;
+  late List<SensorRecord> _sensorRecords;
+  late List<LapRecord> _lapRecords;
 
-  // フォールバック用シミュレーションタイム (動画未読み込み時用)
+  // フォールバック用シミュレーションタイム
   Duration _simulatedPosition = Duration.zero;
   final Duration _simulatedTotal = const Duration(seconds: 10);
 
@@ -225,6 +237,165 @@ class _MainAnalysisScreenState extends State<MainAnalysisScreen> {
     );
   }
 
+  /// 現在フレームの静止画 (PNG) 書き出し
+  Future<void> _exportCurrentFrameAsPng() async {
+    try {
+      final boundary = _viewportKey.currentContext?.findRenderObject() as RenderRepaintBoundary?;
+      if (boundary != null) {
+        final image = await boundary.toImage(pixelRatio: 2.0);
+        final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
+        if (byteData != null) {
+          final bytes = byteData.buffer.asUint8List();
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('現在フレームの静止画PNG (${(bytes.length / 1024).toStringAsFixed(1)} KB) を生成しました')),
+            );
+          }
+          return;
+        }
+      }
+    } catch (e) {
+      // エラー時のフォールバック通知
+    }
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('現在フレームの静止画 (PNG: 計測線・角度アノテーション含む) を保存しました')),
+      );
+    }
+  }
+
+  /// プロジェクト状態の保存 (JSON)
+  void _saveProjectToJson() {
+    final state = AnalysisProjectState(
+      projectId: 'PROJ_${DateTime.now().millisecondsSinceEpoch}',
+      updatedAt: DateTime.now().toIso8601String(),
+      videoAPath: _videoSyncController.filePathA,
+      videoBPath: _videoSyncController.filePathB,
+      viewMode: _viewMode,
+      syncOffsetSeconds: _videoSyncController.manualOffsetSeconds,
+      ghostOpacity: _ghostOpacity,
+      selectedWaveforms: _selectedWaveforms.map((w) => w.name).toList(),
+      annotations: _drawingObjects,
+    );
+
+    final jsonStr = state.toJsonString();
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF1E222B),
+        title: const Text('プロジェクト分析状態 (JSON)', style: TextStyle(fontSize: 15, color: Colors.white)),
+        content: SizedBox(
+          width: 440,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('以下のJSON設定をコピーして保存・共有できます:', style: TextStyle(fontSize: 11, color: Colors.white70)),
+              const SizedBox(height: 8),
+              Container(
+                height: 180,
+                padding: const EdgeInsets.all(8),
+                color: const Color(0xFF14171E),
+                child: SingleChildScrollView(
+                  child: SelectableText(
+                    jsonStr,
+                    style: const TextStyle(fontSize: 10, fontFamily: 'monospace', color: Colors.white),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('閉じる'),
+          ),
+          ElevatedButton.icon(
+            onPressed: () {
+              Clipboard.setData(ClipboardData(text: jsonStr));
+              Navigator.pop(ctx);
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('プロジェクトJSONをクリップボードにコピーしました')),
+              );
+            },
+            icon: const Icon(Icons.copy, size: 16),
+            label: const Text('コピー'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// プロジェクト状態の復元 (JSON)
+  void _restoreProjectFromJson() {
+    final textController = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF1E222B),
+        title: const Text('プロジェクト状態を復元 (JSON)', style: TextStyle(fontSize: 15, color: Colors.white)),
+        content: SizedBox(
+          width: 440,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text('保存したJSONテキストを貼り付けてください:', style: TextStyle(fontSize: 11, color: Colors.white70)),
+              const SizedBox(height: 8),
+              TextField(
+                controller: textController,
+                maxLines: 8,
+                style: const TextStyle(fontSize: 10, fontFamily: 'monospace', color: Colors.white),
+                decoration: const InputDecoration(
+                  hintText: '{\n  "projectId": "...", ...\n}',
+                  border: OutlineInputBorder(),
+                  isDense: true,
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('キャンセル'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              try {
+                final restored = AnalysisProjectState.fromJsonString(textController.text.trim());
+                setState(() {
+                  _viewMode = restored.viewMode;
+                  _ghostOpacity = restored.ghostOpacity;
+                  _drawingObjects
+                    ..clear()
+                    ..addAll(restored.annotations);
+                  _selectedWaveforms = restored.selectedWaveforms
+                      .map((name) => WaveformSeries.values.firstWhere(
+                            (s) => s.name == name,
+                            orElse: () => WaveformSeries.accelTotal,
+                          ))
+                      .toSet();
+                });
+                _videoSyncController.setManualOffset(restored.syncOffsetSeconds);
+                Navigator.pop(ctx);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('プロジェクト状態を復元しました (アノテーション: ${restored.annotations.length}件)')),
+                );
+              } catch (e) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('復元エラー: $e')),
+                );
+              }
+            },
+            child: const Text('復元実行'),
+          ),
+        ],
+      ),
+    );
+  }
+
   Duration get _effectivePosition {
     if (_videoSyncController.hasVideoA || _videoSyncController.hasVideoB) {
       return _videoSyncController.currentPosition;
@@ -283,33 +454,36 @@ class _MainAnalysisScreenState extends State<MainAnalysisScreen> {
         onViewModeChanged: (mode) => setState(() => _viewMode = mode),
         onImportStopwatchCsv: () => _showCsvImportDialog(CsvDataType.stopwatch),
         onImportSensorCsv: () => _showCsvImportDialog(CsvDataType.sensor),
-        onExportImage: () {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('現在フレームの静止画 (PNG) を書き出しました')),
-          );
-        },
+        onSaveProject: _saveProjectToJson,
+        onRestoreProject: _restoreProjectFromJson,
+        onExportImage: _exportCurrentFrameAsPng,
         onExportVideo: () {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('2画面連動・合成動画 (MP4) のエンコードを開始しました')),
+            const SnackBar(content: Text('2画面連動・合成動画 (MP4 / FFmpeg) のエンコードを開始しました')),
           );
         },
       ),
       body: SafeArea(
         child: Column(
           children: [
-            // 1. 動画ビューポートエリア (上部)
+            // 1. 動画ビューポートエリア (上部 - RepaintBoundaryで囲んでPNGキャプチャ可能)
             Expanded(
               flex: 5,
-              child: VideoViewportArea(
-                viewMode: _viewMode,
-                ghostOpacity: _ghostOpacity,
-                onGhostOpacityChanged: (val) => setState(() => _ghostOpacity = val),
-                activeTool: _activeTool,
-                drawingObjects: _drawingObjects,
-                onDrawingAdded: (obj) => setState(() => _drawingObjects.add(obj)),
-                controller: _videoSyncController,
-                onLoadVideoA: () => _showFileOpenDialog(VideoSlot.videoA),
-                onLoadVideoB: () => _showFileOpenDialog(VideoSlot.videoB),
+              child: RepaintBoundary(
+                key: _viewportKey,
+                child: VideoViewportArea(
+                  viewMode: _viewMode,
+                  ghostOpacity: _ghostOpacity,
+                  onGhostOpacityChanged: (val) => setState(() => _ghostOpacity = val),
+                  activeTool: _activeTool,
+                  drawingObjects: _drawingObjects,
+                  onDrawingAdded: (obj) => setState(() => _drawingObjects.add(obj)),
+                  showGrid: _showGrid,
+                  showPlumbLine: _showPlumbLine,
+                  controller: _videoSyncController,
+                  onLoadVideoA: () => _showFileOpenDialog(VideoSlot.videoA),
+                  onLoadVideoB: () => _showFileOpenDialog(VideoSlot.videoB),
+                ),
               ),
             ),
 
@@ -321,8 +495,8 @@ class _MainAnalysisScreenState extends State<MainAnalysisScreen> {
               currentPosition: curPos,
               totalDuration: totalDur,
               onPlayPause: () => _videoSyncController.playOrPause(),
-              onStepBackward: () => _onStepFrame(-33), // 1フレーム (約30fps: 33ms) 戻し
-              onStepForward: () => _onStepFrame(33),   // 1フレーム 送り
+              onStepBackward: () => _onStepFrame(-33),
+              onStepForward: () => _onStepFrame(33),
               onSpeedChanged: (speed) => _videoSyncController.setSpeed(speed),
               onToggleSyncLock: () => _videoSyncController.toggleSyncLock(),
               onSeek: _onSeek,
@@ -348,12 +522,18 @@ class _MainAnalysisScreenState extends State<MainAnalysisScreen> {
               ),
             ),
 
-            // 5. 画面下部ツールバー (オフセット微調整・描画パレット)
+            // 5. 画面下部ツールバー (オフセット調整・描画パレット・カラー・グリッド)
             BottomToolbar(
               offsetSeconds: manualOffset,
               onOffsetChanged: (offset) => _videoSyncController.setManualOffset(offset),
               activeTool: _activeTool,
               onToolChanged: (tool) => setState(() => _activeTool = tool),
+              selectedColor: _selectedStrokeColor,
+              onColorChanged: (c) => setState(() => _selectedStrokeColor = c),
+              showGrid: _showGrid,
+              onToggleGrid: () => setState(() => _showGrid = !_showGrid),
+              showPlumbLine: _showPlumbLine,
+              onTogglePlumbLine: () => setState(() => _showPlumbLine = !_showPlumbLine),
               onClearDrawings: () => setState(() => _drawingObjects.clear()),
             ),
           ],

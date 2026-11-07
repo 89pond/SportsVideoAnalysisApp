@@ -11,6 +11,8 @@ class HeaderBar extends StatelessWidget implements PreferredSizeWidget {
   final VoidCallback onExportVideo;
   final VoidCallback onImportStopwatchCsv;
   final VoidCallback onImportSensorCsv;
+  final VoidCallback onSaveProject;
+  final VoidCallback onRestoreProject;
 
   const HeaderBar({
     super.key,
@@ -21,6 +23,8 @@ class HeaderBar extends StatelessWidget implements PreferredSizeWidget {
     required this.onExportVideo,
     required this.onImportStopwatchCsv,
     required this.onImportSensorCsv,
+    required this.onSaveProject,
+    required this.onRestoreProject,
   });
 
   @override
@@ -83,9 +87,34 @@ class HeaderBar extends StatelessWidget implements PreferredSizeWidget {
               onImportStopwatchCsv();
             } else if (value == 'csv_sensor') {
               onImportSensorCsv();
+            } else if (value == 'project_save') {
+              onSaveProject();
+            } else if (value == 'project_restore') {
+              onRestoreProject();
             }
           },
           itemBuilder: (context) => [
+            const PopupMenuItem(
+              value: 'project_save',
+              child: Row(
+                children: [
+                  Icon(Icons.save_outlined, size: 18, color: AppTheme.accentYellow),
+                  SizedBox(width: 8),
+                  Text('プロジェクト分析状態を保存 (JSON)'),
+                ],
+              ),
+            ),
+            const PopupMenuItem(
+              value: 'project_restore',
+              child: Row(
+                children: [
+                  Icon(Icons.restore_page_outlined, size: 18, color: AppTheme.accentYellow),
+                  SizedBox(width: 8),
+                  Text('プロジェクト分析状態を復元 (JSON)'),
+                ],
+              ),
+            ),
+            const PopupMenuDivider(),
             const PopupMenuItem(
               value: 'csv_sw',
               child: Row(

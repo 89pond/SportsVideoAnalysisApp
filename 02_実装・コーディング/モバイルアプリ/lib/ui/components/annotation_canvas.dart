@@ -4,13 +4,15 @@ import '../../models/view_mode.dart';
 import '../../models/drawing_object.dart';
 import '../../utils/goniometer_calculator.dart';
 
-/// 描画・角度計測オーバーレイキャンバス
+/// 描画・角度計測オーバーレイキャンバス (グリッド・プラムライン対応)
 class AnnotationCanvas extends StatefulWidget {
   final DrawingToolType activeTool;
   final Color strokeColor;
   final double strokeWidth;
   final List<DrawingObject> objects;
   final Function(DrawingObject) onObjectAdded;
+  final bool showGrid;
+  final bool showPlumbLine;
 
   const AnnotationCanvas({
     super.key,
@@ -19,6 +21,8 @@ class AnnotationCanvas extends StatefulWidget {
     this.strokeWidth = 3.0,
     required this.objects,
     required this.onObjectAdded,
+    this.showGrid = false,
+    this.showPlumbLine = false,
   });
 
   @override
@@ -72,7 +76,6 @@ class _AnnotationCanvasState extends State<AnnotationCanvas> {
     if (widget.activeTool == DrawingToolType.angleGoniometer) {
       setState(() {
         _currentPoints.add(details.localPosition);
-        // 3点タップされたら角度計算してオブジェクト確定
         if (_currentPoints.length == 3) {
           final angle = GoniometerCalculator.calculateAngle(
             _currentPoints[0],
@@ -110,6 +113,8 @@ class _AnnotationCanvasState extends State<AnnotationCanvas> {
           currentPoints: _currentPoints,
           currentColor: widget.strokeColor,
           currentWidth: widget.strokeWidth,
+          showGrid: widget.showGrid,
+          showPlumbLine: widget.showPlumbLine,
         ),
       ),
     );
@@ -122,6 +127,8 @@ class _AnnotationPainter extends CustomPainter {
   final List<Offset> currentPoints;
   final Color currentColor;
   final double currentWidth;
+  final bool showGrid;
+  final bool showPlumbLine;
 
   _AnnotationPainter({
     required this.objects,
@@ -129,16 +136,47 @@ class _AnnotationPainter extends CustomPainter {
     required this.currentPoints,
     required this.currentColor,
     required this.currentWidth,
+    required this.showGrid,
+    required this.showPlumbLine,
   });
 
   @override
   void paint(Canvas canvas, Size size) {
-    // 既存オブジェクトの描画
+    // 1. 方眼グリッド描画
+    if (showGrid) {
+      final gridPaint = Paint()
+        ..color = Colors.cyan.withOpacity(0.18)
+        ..strokeWidth = 0.8;
+      const step = 40.0;
+      for (double x = 0; x < size.width; x += step) {
+        canvas.drawLine(Offset(x, 0), Offset(x, size.height), gridPaint);
+      }
+      for (double y = 0; y < size.height; y += step) {
+        canvas.drawLine(Offset(0, y), Offset(size.width, y), gridPaint);
+      }
+    }
+
+    // 2. 鉛直プラムライン & 水平基準線描画
+    if (showPlumbLine) {
+      final plumbPaint = Paint()
+        ..color = Colors.redAccent.withOpacity(0.65)
+        ..strokeWidth = 1.2
+        ..style = PaintingStyle.stroke;
+
+      final midX = size.width / 2;
+      final midY = size.height / 2;
+      // 鉛直垂線
+      canvas.drawLine(Offset(midX, 0), Offset(midX, size.height), plumbPaint);
+      // 水平線
+      canvas.drawLine(Offset(0, midY), Offset(size.width, midY), plumbPaint);
+    }
+
+    // 3. 確定済みアノテーションの描画
     for (final obj in objects) {
       _drawObject(canvas, obj.type, obj.points, obj.color, obj.strokeWidth, obj.calculatedAngle);
     }
 
-    // 現在描画中のオブジェクト描画
+    // 4. 現在ドラッグ描画中のオブジェクト描画
     if (currentPoints.isNotEmpty) {
       _drawObject(canvas, currentTool, currentPoints, currentColor, currentWidth, null);
     }
@@ -221,12 +259,11 @@ class _AnnotationPainter extends CustomPainter {
     }
 
     if (points.length == 3 && angle != null) {
-      // 頂点B (points[1]) のそばに角度テキストを描画
       final textSpan = TextSpan(
         text: ' $angle° ',
         style: const TextStyle(
           color: Colors.black,
-          fontSize: 16,
+          fontSize: 15,
           fontWeight: FontWeight.bold,
           backgroundColor: Colors.yellow,
         ),

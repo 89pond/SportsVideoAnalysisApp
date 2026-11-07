@@ -14,6 +14,8 @@ class VideoViewportArea extends StatelessWidget {
   final DrawingToolType activeTool;
   final List<DrawingObject> drawingObjects;
   final Function(DrawingObject) onDrawingAdded;
+  final bool showGrid;
+  final bool showPlumbLine;
 
   // デュアル動画コントローラープロパティ
   final DualVideoSyncController? controller;
@@ -28,6 +30,8 @@ class VideoViewportArea extends StatelessWidget {
     required this.activeTool,
     required this.drawingObjects,
     required this.onDrawingAdded,
+    this.showGrid = false,
+    this.showPlumbLine = false,
     this.controller,
     required this.onLoadVideoA,
     required this.onLoadVideoB,
@@ -84,6 +88,8 @@ class VideoViewportArea extends StatelessWidget {
             activeTool: activeTool,
             objects: drawingObjects,
             onObjectAdded: onDrawingAdded,
+            showGrid: showGrid,
+            showPlumbLine: showPlumbLine,
           ),
         ),
       ],
