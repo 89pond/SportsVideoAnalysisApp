@@ -15,11 +15,13 @@ class SensorRecord {
   final double gyroX;
   final double gyroY;
   final double gyroZ;
+  final double totalGyro;         // 角速度合成 sqrt(X^2 + Y^2 + Z^2)
 
   // 3軸角度 (°)
   final double angleX;
   final double angleY;
   final double angleZ;
+  final double totalAngle;        // 角度合成 sqrt(X^2 + Y^2 + Z^2)
 
   // 温度 (℃)
   final double? temperature;
@@ -34,13 +36,15 @@ class SensorRecord {
     required this.gyroX,
     required this.gyroY,
     required this.gyroZ,
+    required this.totalGyro,
     required this.angleX,
     required this.angleY,
     required this.angleZ,
+    required this.totalAngle,
     this.temperature,
   });
 
-  /// 3軸加速度から合成Gを自動計算するファクトリ
+  /// 3軸加速度・角速度・角度から合成値を自動計算するファクトリ
   factory SensorRecord.fromRaw({
     required DateTime timestamp,
     required int elapsedMilliseconds,
@@ -56,6 +60,9 @@ class SensorRecord {
     double? temp,
   }) {
     final g = sqrt(ax * ax + ay * ay + az * az);
+    final totalGyr = sqrt(gx * gx + gy * gy + gz * gz);
+    final totalAng = sqrt(roll * roll + pitch * pitch + yaw * yaw);
+
     return SensorRecord(
       timestamp: timestamp,
       elapsedMilliseconds: elapsedMilliseconds,
@@ -66,9 +73,11 @@ class SensorRecord {
       gyroX: gx,
       gyroY: gy,
       gyroZ: gz,
+      totalGyro: totalGyr,
       angleX: roll,
       angleY: pitch,
       angleZ: yaw,
+      totalAngle: totalAng,
       temperature: temp,
     );
   }

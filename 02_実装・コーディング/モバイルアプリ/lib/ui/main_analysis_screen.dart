@@ -4,6 +4,7 @@ import '../models/view_mode.dart';
 import '../models/sensor_record.dart';
 import '../models/lap_record.dart';
 import '../models/drawing_object.dart';
+import '../models/waveform_series.dart';
 import '../utils/binary_search_sync.dart';
 import 'components/header_bar.dart';
 import 'components/video_viewport_area.dart';
@@ -39,6 +40,14 @@ class _MainAnalysisScreenState extends State<MainAnalysisScreen> {
   DrawingToolType _activeTool = DrawingToolType.none;
   final List<DrawingObject> _drawingObjects = [];
 
+  // 表示波形系列 (初期値: 加速度3軸 + 加速度合成G)
+  Set<WaveformSeries> _selectedWaveforms = {
+    WaveformSeries.accelX,
+    WaveformSeries.accelY,
+    WaveformSeries.accelZ,
+    WaveformSeries.accelTotal,
+  };
+
   // サンプルデータ
   late final List<SensorRecord> _sensorRecords;
   late final List<LapRecord> _lapRecords;
@@ -60,6 +69,12 @@ class _MainAnalysisScreenState extends State<MainAnalysisScreen> {
         ax: sin(t * 2) * 1.5,
         ay: cos(t * 2) * 0.8,
         az: 1.0 + sin(t * 4) * 0.5,
+        gx: cos(t * 2) * 300.0,
+        gy: sin(t * 3) * 200.0,
+        gz: cos(t * 1.5) * 150.0,
+        roll: sin(t) * 35.0,
+        pitch: cos(t * 1.2) * 25.0,
+        yaw: (i * 3.6) % 360 - 180,
       );
     });
 
@@ -186,13 +201,15 @@ class _MainAnalysisScreenState extends State<MainAnalysisScreen> {
               diffSeconds: -0.15,
             ),
 
-            // 4. 加速度波形グラフエリア
+            // 4. 加速度・角速度・角度波形グラフエリア
             Expanded(
               flex: 3,
               child: SensorWaveformArea(
                 records: _sensorRecords,
                 currentPosition: _currentPosition,
                 totalDuration: _totalDuration,
+                selectedSeries: _selectedWaveforms,
+                onSelectedSeriesChanged: (newSet) => setState(() => _selectedWaveforms = newSet),
                 onSeek: _onSeek,
               ),
             ),

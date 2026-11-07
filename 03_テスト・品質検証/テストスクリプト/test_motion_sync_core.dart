@@ -112,7 +112,7 @@ void main() {
   assertEqual('45度傾斜 (45°)', angle45, 45.0);
 
   // 2. 二分探索 (Binary Search) 同期テスト
-  print('\n-- [2/2] 時系列二分探索同期テスト --');
+  print('\n-- [2/3] 時系列二分探索同期テスト --');
   final records = List.generate(10, (i) => DummySensorRecord(i * 100, i * 0.5)); // 0, 100, 200, ..., 900 ms
 
   // 完全一致
@@ -134,6 +134,20 @@ void main() {
   // 境界値 (900ms超過)
   final rOver = BinarySearchSync.findNearest(records, 1500);
   assertEqual('境界値 (末尾超過 -> 900ms)', rOver?.elapsedMilliseconds, 900);
+
+  // 3. 各要素3軸データ合算 (合成ベクトル) テスト
+  print('\n-- [3/3] 各要素3軸データ合算 (合成ベクトル) テスト --');
+  // 加速度合成: sqrt(1.0^2 + 2.0^2 + 2.0^2) = 3.0
+  final totalG = sqrt(1.0 * 1.0 + 2.0 * 2.0 + 2.0 * 2.0);
+  assertEqual('加速度合成G (1G, 2G, 2G -> 3.0G)', double.parse(totalG.toStringAsFixed(2)), 3.0);
+
+  // 角速度合成: sqrt(300^2 + 400^2 + 0^2) = 500.0
+  final totalGyro = sqrt(300.0 * 300.0 + 400.0 * 400.0 + 0.0);
+  assertEqual('角速度合成 (300, 400, 0 -> 500°/s)', double.parse(totalGyro.toStringAsFixed(1)), 500.0);
+
+  // 角度合成: sqrt(30^2 + 40^2 + 0^2) = 50.0
+  final totalAngle = sqrt(30.0 * 30.0 + 40.0 * 40.0 + 0.0);
+  assertEqual('角度合成 (30, 40, 0 -> 50°)', double.parse(totalAngle.toStringAsFixed(1)), 50.0);
 
   print('------------------------------------------------------');
   print('テスト結果: $passed 成功 / $failed 失敗');
