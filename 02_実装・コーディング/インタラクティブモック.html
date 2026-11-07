@@ -50,7 +50,83 @@
     .gauge-fill { height: 100%; background: #FFD600; width: 45%; transition: width 0.1s; }
 
     /* Waveform Area */
-    #waveform-area { flex: 3; background: #121418; display: flex; flex-direction: column; position: relative; border-top: 1px solid rgba(255,255,255,0.06); }
+    #waveform-area { flex: 3; background: #121418; display: flex; flex-direction: column; position: relative; border-top: 1px solid rgba(255,255,255,0.06); transition: all 0.25s ease; }
+    #waveform-area.collapsed { display: none; }
+
+    /* HUD Scope Overlay (スマホ横向き向け波形オーバーレイ) */
+    #scope-overlay-hud {
+      position: absolute;
+      top: 12px;
+      bottom: 12px;
+      right: 12px;
+      width: 320px;
+      background: rgba(15, 18, 24, 0.82);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      border: 1px solid rgba(0, 229, 255, 0.35);
+      border-radius: 8px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.6);
+      z-index: 25;
+      display: none;
+      flex-direction: column;
+      overflow: hidden;
+      transition: right 0.2s, left 0.2s, opacity 0.2s;
+    }
+    #scope-overlay-hud.pos-left {
+      right: auto;
+      left: 12px;
+    }
+    .scope-header {
+      background: rgba(255,255,255,0.06);
+      padding: 6px 10px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid rgba(255,255,255,0.08);
+      font-size: 11px;
+    }
+    .scope-title {
+      font-weight: bold;
+      color: #00E5FF;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .scope-ctrls {
+      display: flex;
+      gap: 4px;
+      align-items: center;
+    }
+    .mini-btn {
+      background: rgba(255,255,255,0.1);
+      border: 1px solid rgba(255,255,255,0.2);
+      color: #fff;
+      font-size: 10px;
+      padding: 2px 6px;
+      border-radius: 3px;
+      cursor: pointer;
+    }
+    .mini-btn:hover { background: rgba(0,229,255,0.2); border-color: #00E5FF; }
+    #scope-canvas {
+      flex: 1;
+      width: 100%;
+      height: 100%;
+    }
+    .scope-footer {
+      background: rgba(0,0,0,0.4);
+      padding: 4px 8px;
+      font-size: 10px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-top: 1px solid rgba(255,255,255,0.05);
+      color: #aaa;
+    }
+    .scope-val-badge {
+      font-family: monospace;
+      color: #00E5FF;
+      font-weight: bold;
+    }
     .wave-header { display: flex; align-items: center; justify-content: space-between; padding: 4px 12px; background: #161920; }
     .wave-chips { display: flex; gap: 6px; overflow-x: auto; padding: 2px 0; }
     .chip { font-size: 10px; padding: 2px 8px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.2); background: rgba(255,255,255,0.05); color: #888; cursor: pointer; display: flex; align-items: center; gap: 4px; white-space: nowrap; }
@@ -82,6 +158,7 @@
       <button class="mode-btn" onclick="setViewMode('ghost')">透過ゴースト</button>
     </div>
     <div style="display:flex; gap:6px;">
+      <button class="menu-btn" id="hud-overlay-btn" onclick="toggleScopeOverlay()" style="background:#262C38; border-color:#00E5FF; color:#00E5FF; font-weight:bold;">📱 HUDオーバーレイ: OFF</button>
       <button class="menu-btn" onclick="saveProjectJson()">💾 保存</button>
       <button class="menu-btn" onclick="capturePng()">📸 PNG保存</button>
     </div>
@@ -92,6 +169,27 @@
     <div id="ghost-slider-panel">
       <span>透過度: <span id="ghost-val">50%</span></span>
       <input type="range" id="ghost-range" min="0" max="100" value="50" oninput="updateGhost(this.value)" style="width:90px; accent-color:#7C4DFF;">
+    </div>
+
+    <!-- HUD Scope Overlay (スマホ横向き向け波形オーバーレイ) -->
+    <div id="scope-overlay-hud">
+      <div class="scope-header">
+        <div class="scope-title">
+          <span>📊 センサー波形スコープ</span>
+          <span id="scope-range-badge" style="color:#aaa; font-weight:normal; font-size:10px;">(±2.0秒)</span>
+        </div>
+        <div class="scope-ctrls">
+          <button class="mini-btn" onclick="cycleScopeWindow()">切替: <span id="btn-sec-val">±2s</span></button>
+          <button class="mini-btn" onclick="toggleScopePosition()" title="左右位置反転">⇄ 左右</button>
+          <button class="mini-btn" onclick="toggleScopeOpacity()" title="透過度切替">半透明</button>
+          <button class="mini-btn" onclick="toggleScopeOverlay()" style="color:#FF5252;">✕</button>
+        </div>
+      </div>
+      <canvas id="scope-canvas"></canvas>
+      <div class="scope-footer">
+        <span>ピーク合成値: <span id="scope-peak-val" class="scope-val-badge">0.00 G</span></span>
+        <span>現在値: <span id="scope-cur-val" class="scope-val-badge">0.00 G</span></span>
+      </div>
     </div>
 
     <!-- Video A -->
@@ -279,9 +377,18 @@
       drawAnnotations();
 
       const wCanvas = document.getElementById('wave-canvas');
-      wCanvas.width = wCanvas.parentElement.clientWidth;
-      wCanvas.height = wCanvas.parentElement.clientHeight;
-      drawWaveform();
+      if (wCanvas && wCanvas.parentElement) {
+        wCanvas.width = wCanvas.parentElement.clientWidth;
+        wCanvas.height = wCanvas.parentElement.clientHeight;
+        drawWaveform();
+      }
+
+      const sCanvas = document.getElementById('scope-canvas');
+      if (sCanvas && sCanvas.parentElement) {
+        sCanvas.width = sCanvas.parentElement.clientWidth;
+        sCanvas.height = sCanvas.parentElement.clientHeight - 62;
+        if (isScopeOverlay) drawScopeWaveform();
+      }
     }
 
     // --- 波形チップ生成 ---
@@ -442,6 +549,156 @@
       }
 
       drawWaveform();
+      if (isScopeOverlay) drawScopeWaveform();
+    }
+
+    // --- スコープHUDオーバーレイ制御 ---
+    let isScopeOverlay = false;
+    let scopePosition = 'right'; // 'right' or 'left'
+    let scopeWindowSec = 2.0;    // 前後±2.0秒 (計4秒)
+    let scopeOpacityMode = 0;    // 0: 0.85, 1: 0.60, 2: 0.35
+
+    function toggleScopeOverlay() {
+      isScopeOverlay = !isScopeOverlay;
+      const btn = document.getElementById('hud-overlay-btn');
+      const hud = document.getElementById('scope-overlay-hud');
+      const waveArea = document.getElementById('waveform-area');
+
+      if (isScopeOverlay) {
+        btn.innerText = '📱 HUDオーバーレイ: ON';
+        btn.style.background = '#00E5FF';
+        btn.style.color = '#000';
+        hud.style.display = 'flex';
+        waveArea.classList.add('collapsed');
+      } else {
+        btn.innerText = '📱 HUDオーバーレイ: OFF';
+        btn.style.background = '#262C38';
+        btn.style.color = '#00E5FF';
+        hud.style.display = 'none';
+        waveArea.classList.remove('collapsed');
+      }
+      resizeCanvases();
+      updateUI();
+    }
+
+    function toggleScopePosition() {
+      scopePosition = scopePosition === 'right' ? 'left' : 'right';
+      const hud = document.getElementById('scope-overlay-hud');
+      hud.classList.toggle('pos-left', scopePosition === 'left');
+    }
+
+    function cycleScopeWindow() {
+      if (scopeWindowSec === 2.0) scopeWindowSec = 1.0;
+      else if (scopeWindowSec === 1.0) scopeWindowSec = 3.0;
+      else scopeWindowSec = 2.0;
+
+      document.getElementById('scope-range-badge').innerText = `(±${scopeWindowSec.toFixed(1)}秒)`;
+      document.getElementById('btn-sec-val').innerText = `±${scopeWindowSec.toFixed(0)}s`;
+      drawScopeWaveform();
+    }
+
+    function toggleScopeOpacity() {
+      scopeOpacityMode = (scopeOpacityMode + 1) % 3;
+      const opacities = [0.85, 0.60, 0.35];
+      const hud = document.getElementById('scope-overlay-hud');
+      hud.style.background = `rgba(15, 18, 24, ${opacities[scopeOpacityMode]})`;
+    }
+
+    function drawScopeWaveform() {
+      const canvas = document.getElementById('scope-canvas');
+      if (!canvas || !isScopeOverlay) return;
+      const ctx = canvas.getContext('2d');
+      const w = canvas.width;
+      const h = canvas.height;
+      ctx.clearRect(0, 0, w, h);
+
+      const windowMs = scopeWindowSec * 1000;
+      const startMs = currentMs - windowMs;
+      const endMs = currentMs + windowMs;
+
+      // 時間目盛ライン（0.5秒刻み）
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.08)';
+      ctx.lineWidth = 1;
+      const stepMs = 500;
+      const firstGrid = Math.ceil(startMs / stepMs) * stepMs;
+      for (let t = firstGrid; t <= endMs; t += stepMs) {
+        const x = ((t - startMs) / (windowMs * 2)) * w;
+        ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, h); ctx.stroke();
+
+        const diffSec = (t - currentMs) / 1000;
+        if (Math.abs(diffSec) > 0.1) {
+          ctx.fillStyle = 'rgba(255, 255, 255, 0.35)';
+          ctx.font = '9px monospace';
+          const label = (diffSec > 0 ? '+' : '') + diffSec.toFixed(1) + 's';
+          ctx.fillText(label, x - 10, h - 4);
+        }
+      }
+
+      // 中央ゼロ水平線
+      const midY = h / 2;
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)';
+      ctx.beginPath(); ctx.moveTo(0, midY); ctx.lineTo(w, midY); ctx.stroke();
+
+      // スコープ内のセンサーデータ
+      const scopeData = sensorData.filter(d => d.ms >= startMs && d.ms <= endMs);
+      let maxScopePeak = 0;
+      let curNearest = findNearestSensor(currentMs);
+
+      // 選択波形の描画
+      const activeSeries = WAVE_SERIES.filter(s => s.selected);
+      activeSeries.forEach(series => {
+        ctx.strokeStyle = series.color;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+
+        let scaleY = 30;
+        if (series.id.startsWith('acc')) scaleY = h / 7;
+        else if (series.id.startsWith('gyr')) scaleY = h / 900;
+        else if (series.id.startsWith('ang')) scaleY = h / 380;
+
+        scopeData.forEach((rec, idx) => {
+          const x = ((rec.ms - startMs) / (windowMs * 2)) * w;
+          let val = 0;
+          if (series.id === 'accX') val = rec.ax;
+          else if (series.id === 'accY') val = rec.ay;
+          else if (series.id === 'accZ') val = rec.az;
+          else if (series.id === 'accTotal') { val = rec.totalG; if (val > maxScopePeak) maxScopePeak = val; }
+          else if (series.id === 'gyrX') val = rec.gx;
+          else if (series.id === 'gyrY') val = rec.gy;
+          else if (series.id === 'gyrZ') val = rec.gz;
+          else if (series.id === 'gyrTotal') val = rec.totalGyr;
+          else if (series.id === 'angX') val = rec.roll;
+          else if (series.id === 'angY') val = rec.pitch;
+          else if (series.id === 'angZ') val = rec.yaw;
+          else if (series.id === 'angTotal') val = rec.totalAng;
+
+          const y = Math.max(4, Math.min(h - 4, midY - (val * scaleY)));
+          if (idx === 0) ctx.moveTo(x, y);
+          else ctx.lineTo(x, y);
+        });
+        ctx.stroke();
+      });
+
+      // 中央 NOW マーカー (赤い現在時刻縦線)
+      const centerX = w / 2;
+      ctx.strokeStyle = '#FF5252';
+      ctx.lineWidth = 2;
+      ctx.setLineDash([4, 2]);
+      ctx.beginPath(); ctx.moveTo(centerX, 0); ctx.lineTo(centerX, h); ctx.stroke();
+      ctx.setLineDash([]);
+
+      // 現在マーカーバッジ
+      ctx.fillStyle = '#FF5252';
+      ctx.fillRect(centerX - 16, 2, 32, 14);
+      ctx.fillStyle = '#fff';
+      ctx.font = 'bold 9px sans-serif';
+      ctx.fillText('NOW', centerX - 10, 12);
+
+      // フッター数値更新
+      if (curNearest) {
+        document.getElementById('scope-cur-val').innerText = `${curNearest.totalG.toFixed(2)} G`;
+      }
+      document.getElementById('scope-peak-val').innerText = `${(maxScopePeak || (curNearest ? curNearest.totalG : 0)).toFixed(2)} G`;
     }
 
     function findNearestSensor(targetMs) {
