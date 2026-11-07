@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:media_kit/media_kit.dart';
 import 'ui/theme/app_theme.dart';
 import 'ui/main_analysis_screen.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
+  MediaKit.ensureInitialized();
   runApp(const MotionSyncApp());
 }
 

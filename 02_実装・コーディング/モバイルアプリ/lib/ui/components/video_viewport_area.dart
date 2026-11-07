@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import '../../models/view_mode.dart';
 import '../../models/drawing_object.dart';
+import '../../services/dual_video_controller.dart';
 import '../theme/app_theme.dart';
 import 'annotation_canvas.dart';
+import 'video_player_box.dart';
 
 /// 動画表示ビューポートエリア (1画面 / 2画面並列 / 透過ゴースト切替)
 class VideoViewportArea extends StatelessWidget {
@@ -13,6 +15,11 @@ class VideoViewportArea extends StatelessWidget {
   final List<DrawingObject> drawingObjects;
   final Function(DrawingObject) onDrawingAdded;
 
+  // デュアル動画コントローラープロパティ
+  final DualVideoSyncController? controller;
+  final VoidCallback onLoadVideoA;
+  final VoidCallback onLoadVideoB;
+
   const VideoViewportArea({
     super.key,
     required this.viewMode,
@@ -21,18 +28,21 @@ class VideoViewportArea extends StatelessWidget {
     required this.activeTool,
     required this.drawingObjects,
     required this.onDrawingAdded,
+    this.controller,
+    required this.onLoadVideoA,
+    required this.onLoadVideoB,
   });
 
   @override
   Widget build(BuildContext context) {
     return Stack(
       children: [
-        // 背景: 動画表示レイアウト
+        // 1. 動画表示レイアウト (下層)
         Positioned.fill(
           child: _buildVideoLayout(context),
         ),
 
-        // 透過ゴーストモード時の不透明度スライダー
+        // 2. 透過ゴーストモード時の不透明度スライダー (右上オーバーレイ)
         if (viewMode == ViewMode.ghostOverlay)
           Positioned(
             top: 10,
@@ -40,7 +50,7 @@ class VideoViewportArea extends StatelessWidget {
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
               decoration: BoxDecoration(
-                color: Colors.black.withOpacity(0.7),
+                color: Colors.black.withOpacity(0.8),
                 borderRadius: BorderRadius.circular(20),
                 border: Border.all(color: AppTheme.accentPurple, width: 1),
               ),
@@ -50,7 +60,7 @@ class VideoViewportArea extends StatelessWidget {
                   const Icon(Icons.opacity, size: 14, color: AppTheme.accentPurple),
                   const SizedBox(width: 4),
                   Text(
-                    'ゴースト透過: ${(ghostOpacity * 100).toInt()}%',
+                    '透過度: ${(ghostOpacity * 100).toInt()}%',
                     style: const TextStyle(fontSize: 11, color: Colors.white),
                   ),
                   SizedBox(
@@ -68,7 +78,7 @@ class VideoViewportArea extends StatelessWidget {
             ),
           ),
 
-        // 最前面: アノテーション・角度計測キャンバス
+        // 3. 最前面: アノテーション・角度計測キャンバス
         Positioned.fill(
           child: AnnotationCanvas(
             activeTool: activeTool,
@@ -81,69 +91,79 @@ class VideoViewportArea extends StatelessWidget {
   }
 
   Widget _buildVideoLayout(BuildContext context) {
+    final c = controller;
+
+    final boxA = VideoPlayerBox(
+      slot: VideoSlot.videoA,
+      label: '動画 A (自選手)',
+      themeColor: AppTheme.primary,
+      videoController: c?.videoControllerA,
+      hasVideo: c?.hasVideoA ?? false,
+      filePath: c?.filePathA,
+      position: c?.positionA ?? Duration.zero,
+      isActive: c?.activeSlot == VideoSlot.videoA,
+      onTapSelect: () => c?.setActiveSlot(VideoSlot.videoA),
+      onLoadFile: onLoadVideoA,
+    );
+
+    final boxB = VideoPlayerBox(
+      slot: VideoSlot.videoB,
+      label: '動画 B (お手本)',
+      themeColor: AppTheme.secondary,
+      videoController: c?.videoControllerB,
+      hasVideo: c?.hasVideoB ?? false,
+      filePath: c?.filePathB,
+      position: c?.positionB ?? Duration.zero,
+      isActive: c?.activeSlot == VideoSlot.videoB,
+      onTapSelect: () => c?.setActiveSlot(VideoSlot.videoB),
+      onLoadFile: onLoadVideoB,
+    );
+
     switch (viewMode) {
       case ViewMode.single:
-        return _videoContainer(label: '動画 A (メイン)', color: AppTheme.primary, isGhost: false);
+        return boxA;
 
       case ViewMode.splitHorizontal:
         return Row(
           children: [
-            Expanded(child: _videoContainer(label: '動画 A (自選手)', color: AppTheme.primary, isGhost: false)),
+            Expanded(child: boxA),
             Container(width: 2, color: Colors.white24),
-            Expanded(child: _videoContainer(label: '動画 B (お手本)', color: AppTheme.secondary, isGhost: false)),
+            Expanded(child: boxB),
           ],
         );
 
       case ViewMode.splitVertical:
         return Column(
           children: [
-            Expanded(child: _videoContainer(label: '動画 A (自選手)', color: AppTheme.primary, isGhost: false)),
+            Expanded(child: boxA),
             Container(height: 2, color: Colors.white24),
-            Expanded(child: _videoContainer(label: '動画 B (お手本)', color: AppTheme.secondary, isGhost: false)),
+            Expanded(child: boxB),
           ],
         );
 
       case ViewMode.ghostOverlay:
         return Stack(
           children: [
-            Positioned.fill(
-              child: _videoContainer(label: '動画 A (ベース)', color: AppTheme.primary, isGhost: false),
-            ),
+            Positioned.fill(child: boxA),
             Positioned.fill(
               child: Opacity(
                 opacity: ghostOpacity,
-                child: _videoContainer(label: '動画 B (ゴースト)', color: AppTheme.secondary, isGhost: true),
+                child: VideoPlayerBox(
+                  slot: VideoSlot.videoB,
+                  label: '動画 B (ゴースト)',
+                  themeColor: AppTheme.secondary,
+                  videoController: c?.videoControllerB,
+                  hasVideo: c?.hasVideoB ?? false,
+                  filePath: c?.filePathB,
+                  position: c?.positionB ?? Duration.zero,
+                  isGhost: true,
+                  onTapSelect: () {},
+                  onLoadFile: onLoadVideoB,
+                ),
               ),
             ),
           ],
         );
     }
-  }
-
-  Widget _videoContainer({required String label, required Color color, required bool isGhost}) {
-    return Container(
-      color: isGhost ? Colors.transparent : const Color(0xFF161920),
-      child: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.movie_outlined, size: 48, color: color.withOpacity(0.4)),
-            const SizedBox(height: 8),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-              decoration: BoxDecoration(
-                color: Colors.black54,
-                borderRadius: BorderRadius.circular(4),
-                border: Border.all(color: color.withOpacity(0.5)),
-              ),
-              child: Text(
-                label,
-                style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: color),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
   }
 }

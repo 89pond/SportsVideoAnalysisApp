@@ -5,6 +5,7 @@ import '../models/sensor_record.dart';
 import '../models/lap_record.dart';
 import '../models/drawing_object.dart';
 import '../models/waveform_series.dart';
+import '../services/dual_video_controller.dart';
 import '../utils/binary_search_sync.dart';
 import 'components/header_bar.dart';
 import 'components/video_viewport_area.dart';
@@ -22,19 +23,12 @@ class MainAnalysisScreen extends StatefulWidget {
 }
 
 class _MainAnalysisScreenState extends State<MainAnalysisScreen> {
+  // デュアル動画同期コントローラー
+  late final DualVideoSyncController _videoSyncController;
+
   // 表示モード
   ViewMode _viewMode = ViewMode.splitHorizontal;
   double _ghostOpacity = 0.5;
-
-  // 再生制御状態
-  bool _isPlaying = false;
-  double _playbackSpeed = 0.25;
-  bool _isSyncLocked = true;
-  Duration _currentPosition = Duration.zero;
-  final Duration _totalDuration = const Duration(seconds: 10);
-
-  // 同期オフセット
-  double _offsetSeconds = 0.0;
 
   // 描画アノテーション状態
   DrawingToolType _activeTool = DrawingToolType.none;
@@ -52,10 +46,27 @@ class _MainAnalysisScreenState extends State<MainAnalysisScreen> {
   late final List<SensorRecord> _sensorRecords;
   late final List<LapRecord> _lapRecords;
 
+  // フォールバック用シミュレーションタイム (動画未読み込み時用)
+  Duration _simulatedPosition = Duration.zero;
+  final Duration _simulatedTotal = const Duration(seconds: 10);
+
   @override
   void initState() {
     super.initState();
+    _videoSyncController = DualVideoSyncController();
+    _videoSyncController.addListener(_onControllerUpdated);
     _initSampleData();
+  }
+
+  void _onControllerUpdated() {
+    setState(() {});
+  }
+
+  @override
+  void dispose() {
+    _videoSyncController.removeListener(_onControllerUpdated);
+    _videoSyncController.dispose();
+    super.dispose();
   }
 
   void _initSampleData() {
@@ -83,7 +94,7 @@ class _MainAnalysisScreenState extends State<MainAnalysisScreen> {
       LapRecord(
         sessionId: 'S001',
         playerName: '石井 更紗',
-        tournamentName: '記録会',
+        tournamentName: '秋季記録会',
         eventType: '陸上トラック',
         lapNo: 1,
         lapSeconds: 3.20,
@@ -97,7 +108,7 @@ class _MainAnalysisScreenState extends State<MainAnalysisScreen> {
       LapRecord(
         sessionId: 'S001',
         playerName: '石井 更紗',
-        tournamentName: '記録会',
+        tournamentName: '秋季記録会',
         eventType: '陸上トラック',
         lapNo: 2,
         lapSeconds: 3.10,
@@ -112,7 +123,7 @@ class _MainAnalysisScreenState extends State<MainAnalysisScreen> {
       LapRecord(
         sessionId: 'S001',
         playerName: '石井 更紗',
-        tournamentName: '記録会',
+        tournamentName: '秋季記録会',
         eventType: '陸上トラック',
         lapNo: 3,
         lapSeconds: 3.40,
@@ -126,24 +137,109 @@ class _MainAnalysisScreenState extends State<MainAnalysisScreen> {
     ];
   }
 
-  void _onStepFrame(int deltaMs) {
-    setState(() {
-      final newMs = (_currentPosition.inMilliseconds + deltaMs)
-          .clamp(0, _totalDuration.inMilliseconds);
-      _currentPosition = Duration(milliseconds: newMs);
-    });
+  void _showFileOpenDialog(VideoSlot slot) {
+    final textController = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF1E222B),
+        title: Text(
+          slot == VideoSlot.videoA ? '動画 A (自選手) を開く' : '動画 B (お手本) を開く',
+          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'ローカル動画ファイルのパス (例: sample_run.mp4) を入力してください:',
+              style: TextStyle(fontSize: 12, color: Colors.white70),
+            ),
+            const SizedBox(height: 8),
+            TextField(
+              controller: textController,
+              style: const TextStyle(fontSize: 13, color: Colors.white),
+              decoration: const InputDecoration(
+                hintText: 'C:/path/to/video.mp4 または 相対パス',
+                hintStyle: TextStyle(color: Colors.white24, fontSize: 12),
+                isDense: true,
+                border: OutlineInputBorder(),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('キャンセル'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              final path = textController.text.trim();
+              if (path.isNotEmpty) {
+                if (slot == VideoSlot.videoA) {
+                  _videoSyncController.loadVideoA(path);
+                } else {
+                  _videoSyncController.loadVideoB(path);
+                }
+              }
+              Navigator.pop(ctx);
+            },
+            child: const Text('読み込む'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Duration get _effectivePosition {
+    if (_videoSyncController.hasVideoA || _videoSyncController.hasVideoB) {
+      return _videoSyncController.currentPosition;
+    }
+    return _simulatedPosition;
+  }
+
+  Duration get _effectiveTotalDuration {
+    if (_videoSyncController.totalDuration > Duration.zero) {
+      return _videoSyncController.totalDuration;
+    }
+    return _simulatedTotal;
   }
 
   void _onSeek(double ms) {
-    setState(() {
-      _currentPosition = Duration(milliseconds: ms.toInt());
-    });
+    if (_videoSyncController.hasVideoA || _videoSyncController.hasVideoB) {
+      _videoSyncController.seek(Duration(milliseconds: ms.toInt()));
+    } else {
+      setState(() {
+        _simulatedPosition = Duration(milliseconds: ms.toInt());
+      });
+    }
+  }
+
+  void _onStepFrame(int deltaMs) {
+    if (_videoSyncController.hasVideoA || _videoSyncController.hasVideoB) {
+      if (deltaMs > 0) {
+        _videoSyncController.stepForward(frameMs: deltaMs);
+      } else {
+        _videoSyncController.stepBackward(frameMs: -deltaMs);
+      }
+    } else {
+      setState(() {
+        final newMs = (_simulatedPosition.inMilliseconds + deltaMs)
+            .clamp(0, _simulatedTotal.inMilliseconds);
+        _simulatedPosition = Duration(milliseconds: newMs);
+      });
+    }
   }
 
   @override
   Widget build(BuildContext context) {
+    final curPos = _effectivePosition;
+    final totalDur = _effectiveTotalDuration;
+    final manualOffset = _videoSyncController.manualOffsetSeconds;
+
     // 現在位置に対応するセンサーおよびラップデータを二分探索で瞬時抽出
-    final syncPosMs = (_currentPosition.inMilliseconds + (_offsetSeconds * 1000).toInt()).clamp(0, 10000);
+    final syncPosMs = (curPos.inMilliseconds + (manualOffset * 1000).toInt()).clamp(0, totalDur.inMilliseconds);
     final curSensor = BinarySearchSync.findNearestSensorRecord(_sensorRecords, syncPosMs);
     final curLap = BinarySearchSync.findCurrentLapRecord(_lapRecords, syncPosMs);
 
@@ -159,7 +255,7 @@ class _MainAnalysisScreenState extends State<MainAnalysisScreen> {
         },
         onExportVideo: () {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('合成動画 (MP4) のエンコードを開始しました')),
+            const SnackBar(content: Text('2画面連動・合成動画 (MP4) のエンコードを開始しました')),
           );
         },
       ),
@@ -176,21 +272,24 @@ class _MainAnalysisScreenState extends State<MainAnalysisScreen> {
                 activeTool: _activeTool,
                 drawingObjects: _drawingObjects,
                 onDrawingAdded: (obj) => setState(() => _drawingObjects.add(obj)),
+                controller: _videoSyncController,
+                onLoadVideoA: () => _showFileOpenDialog(VideoSlot.videoA),
+                onLoadVideoB: () => _showFileOpenDialog(VideoSlot.videoB),
               ),
             ),
 
             // 2. 再生制御バー
             PlaybackControlBar(
-              isPlaying: _isPlaying,
-              playbackSpeed: _playbackSpeed,
-              isSyncLocked: _isSyncLocked,
-              currentPosition: _currentPosition,
-              totalDuration: _totalDuration,
-              onPlayPause: () => setState(() => _isPlaying = !_isPlaying),
+              isPlaying: _videoSyncController.isPlaying,
+              playbackSpeed: _videoSyncController.playbackSpeed,
+              isSyncLocked: _videoSyncController.isSyncLocked,
+              currentPosition: curPos,
+              totalDuration: totalDur,
+              onPlayPause: () => _videoSyncController.playOrPause(),
               onStepBackward: () => _onStepFrame(-33), // 1フレーム (約30fps: 33ms) 戻し
               onStepForward: () => _onStepFrame(33),   // 1フレーム 送り
-              onSpeedChanged: (speed) => setState(() => _playbackSpeed = speed),
-              onToggleSyncLock: () => setState(() => _isSyncLocked = !_isSyncLocked),
+              onSpeedChanged: (speed) => _videoSyncController.setSpeed(speed),
+              onToggleSyncLock: () => _videoSyncController.toggleSyncLock(),
               onSeek: _onSeek,
             ),
 
@@ -206,18 +305,18 @@ class _MainAnalysisScreenState extends State<MainAnalysisScreen> {
               flex: 3,
               child: SensorWaveformArea(
                 records: _sensorRecords,
-                currentPosition: _currentPosition,
-                totalDuration: _totalDuration,
+                currentPosition: curPos,
+                totalDuration: totalDur,
                 selectedSeries: _selectedWaveforms,
                 onSelectedSeriesChanged: (newSet) => setState(() => _selectedWaveforms = newSet),
                 onSeek: _onSeek,
               ),
             ),
 
-            // 5. 画面下部ツールバー (オフセット調整・描画パレット)
+            // 5. 画面下部ツールバー (オフセット微調整・描画パレット)
             BottomToolbar(
-              offsetSeconds: _offsetSeconds,
-              onOffsetChanged: (offset) => setState(() => _offsetSeconds = offset),
+              offsetSeconds: manualOffset,
+              onOffsetChanged: (offset) => _videoSyncController.setManualOffset(offset),
               activeTool: _activeTool,
               onToolChanged: (tool) => setState(() => _activeTool = tool),
               onClearDrawings: () => setState(() => _drawingObjects.clear()),
