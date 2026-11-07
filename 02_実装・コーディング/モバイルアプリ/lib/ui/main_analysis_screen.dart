@@ -13,6 +13,7 @@ import 'components/playback_control_bar.dart';
 import 'components/hud_overlay_bar.dart';
 import 'components/sensor_waveform_area.dart';
 import 'components/bottom_toolbar.dart';
+import 'components/csv_import_dialog.dart';
 
 /// 統合分析メイン画面 (Main Analysis Screen)
 class MainAnalysisScreen extends StatefulWidget {
@@ -25,6 +26,9 @@ class MainAnalysisScreen extends StatefulWidget {
 class _MainAnalysisScreenState extends State<MainAnalysisScreen> {
   // デュアル動画同期コントローラー
   late final DualVideoSyncController _videoSyncController;
+
+  // セッションタイトル
+  String _sessionTitle = 'MotionSync Analytics (20261102_CH5)';
 
   // 表示モード
   ViewMode _viewMode = ViewMode.splitHorizontal;
@@ -137,6 +141,35 @@ class _MainAnalysisScreenState extends State<MainAnalysisScreen> {
     ];
   }
 
+  void _showCsvImportDialog(CsvDataType type) {
+    showDialog(
+      context: context,
+      builder: (ctx) => CsvImportDialog(
+        dataType: type,
+        onLapsLoaded: (laps) {
+          setState(() {
+            _lapRecords = laps;
+            if (laps.isNotEmpty) {
+              final first = laps.first;
+              _sessionTitle = '${first.playerName} - ${first.tournamentName} (${first.eventType})';
+            }
+          });
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('ストップウォッチCSV (${laps.length}ラップ) をインポートしました')),
+          );
+        },
+        onSensorsLoaded: (sensors) {
+          setState(() {
+            _sensorRecords = sensors;
+          });
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('加速度センサーCSV (${sensors.length}レコード) をインポートしました')),
+          );
+        },
+      ),
+    );
+  }
+
   void _showFileOpenDialog(VideoSlot slot) {
     final textController = TextEditingController();
     showDialog(
@@ -245,9 +278,11 @@ class _MainAnalysisScreenState extends State<MainAnalysisScreen> {
 
     return Scaffold(
       appBar: HeaderBar(
-        title: 'MotionSync Analytics (20261102_CH5)',
+        title: _sessionTitle,
         currentViewMode: _viewMode,
         onViewModeChanged: (mode) => setState(() => _viewMode = mode),
+        onImportStopwatchCsv: () => _showCsvImportDialog(CsvDataType.stopwatch),
+        onImportSensorCsv: () => _showCsvImportDialog(CsvDataType.sensor),
         onExportImage: () {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('現在フレームの静止画 (PNG) を書き出しました')),

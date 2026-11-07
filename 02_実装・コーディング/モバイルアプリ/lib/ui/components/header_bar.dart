@@ -9,6 +9,8 @@ class HeaderBar extends StatelessWidget implements PreferredSizeWidget {
   final ValueChanged<ViewMode> onViewModeChanged;
   final VoidCallback onExportImage;
   final VoidCallback onExportVideo;
+  final VoidCallback onImportStopwatchCsv;
+  final VoidCallback onImportSensorCsv;
 
   const HeaderBar({
     super.key,
@@ -17,6 +19,8 @@ class HeaderBar extends StatelessWidget implements PreferredSizeWidget {
     required this.onViewModeChanged,
     required this.onExportImage,
     required this.onExportVideo,
+    required this.onImportStopwatchCsv,
+    required this.onImportSensorCsv,
   });
 
   @override
@@ -66,18 +70,43 @@ class HeaderBar extends StatelessWidget implements PreferredSizeWidget {
         ),
         const SizedBox(width: 8),
 
-        // エクスポートメニュー
+        // データ読み込み＆エクスポートメニュー
         PopupMenuButton<String>(
-          icon: const Icon(Icons.file_download_outlined, color: AppTheme.primary),
-          tooltip: 'エクスポート',
+          icon: const Icon(Icons.more_vert, color: AppTheme.primary),
+          tooltip: 'メニュー',
           onSelected: (value) {
             if (value == 'png') {
               onExportImage();
             } else if (value == 'mp4') {
               onExportVideo();
+            } else if (value == 'csv_sw') {
+              onImportStopwatchCsv();
+            } else if (value == 'csv_sensor') {
+              onImportSensorCsv();
             }
           },
           itemBuilder: (context) => [
+            const PopupMenuItem(
+              value: 'csv_sw',
+              child: Row(
+                children: [
+                  Icon(Icons.timer_outlined, size: 18, color: AppTheme.accentGreen),
+                  SizedBox(width: 8),
+                  Text('ストップウォッチCSV読み込み (LinkLog)'),
+                ],
+              ),
+            ),
+            const PopupMenuItem(
+              value: 'csv_sensor',
+              child: Row(
+                children: [
+                  Icon(Icons.show_chart, size: 18, color: AppTheme.primary),
+                  SizedBox(width: 8),
+                  Text('加速度センサーCSV読み込み (WITMOTION)'),
+                ],
+              ),
+            ),
+            const PopupMenuDivider(),
             const PopupMenuItem(
               value: 'png',
               child: Row(
