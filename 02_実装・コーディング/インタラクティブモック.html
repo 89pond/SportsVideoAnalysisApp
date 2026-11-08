@@ -107,6 +107,12 @@
       cursor: pointer;
     }
     .mini-btn:hover { background: rgba(0,229,255,0.2); border-color: #00E5FF; }
+    .mini-btn.active-src {
+      background: #00E5FF;
+      color: #000;
+      font-weight: bold;
+      border-color: #00E5FF;
+    }
     #scope-canvas {
       flex: 1;
       width: 100%;
@@ -175,20 +181,31 @@
     <div id="scope-overlay-hud">
       <div class="scope-header">
         <div class="scope-title">
-          <span>📊 センサー波形スコープ</span>
+          <span>📊 波形スコープ</span>
           <span id="scope-range-badge" style="color:#aaa; font-weight:normal; font-size:10px;">(±2.0秒)</span>
         </div>
         <div class="scope-ctrls">
-          <button class="mini-btn" onclick="cycleScopeWindow()">切替: <span id="btn-sec-val">±2s</span></button>
-          <button class="mini-btn" onclick="toggleScopePosition()" title="左右位置反転">⇄ 左右</button>
+          <div class="mode-selector" style="font-size:9px; margin-right:4px;">
+            <button class="mini-btn active-src" id="src-scope-both" onclick="setWaveSource('both')">A&B重畳</button>
+            <button class="mini-btn" id="src-scope-a" onclick="setWaveSource('A')">A自身</button>
+            <button class="mini-btn" id="src-scope-b" onclick="setWaveSource('B')">B比較</button>
+          </div>
+          <button class="mini-btn" onclick="cycleScopeWindow()" title="表示秒数切替"><span id="btn-sec-val">±2s</span></button>
+          <button class="mini-btn" onclick="toggleScopePosition()" title="左右位置反転">⇄</button>
           <button class="mini-btn" onclick="toggleScopeOpacity()" title="透過度切替">半透明</button>
           <button class="mini-btn" onclick="toggleScopeOverlay()" style="color:#FF5252;">✕</button>
         </div>
       </div>
       <canvas id="scope-canvas"></canvas>
-      <div class="scope-footer">
-        <span>ピーク合成値: <span id="scope-peak-val" class="scope-val-badge">0.00 G</span></span>
-        <span>現在値: <span id="scope-cur-val" class="scope-val-badge">0.00 G</span></span>
+      <div class="scope-footer" style="flex-direction:column; gap:2px; font-size:9px;">
+        <div style="display:flex; justify-content:space-between; width:100%;">
+          <span>自選手 A: <span id="scope-val-a" style="color:#00E5FF; font-family:monospace; font-weight:bold;">0.00 G</span></span>
+          <span>お手本 B: <span id="scope-val-b" style="color:#FF5252; font-family:monospace; font-weight:bold;">0.00 G</span></span>
+        </div>
+        <div style="display:flex; justify-content:space-between; width:100%; border-top:1px dashed rgba(255,255,255,0.1); padding-top:2px;">
+          <span>差分 Δ(A-B): <span id="scope-diff-val" style="color:#FFD600; font-family:monospace; font-weight:bold;">0.00 G</span></span>
+          <span style="color:#888;">実線=A / 破線=B</span>
+        </div>
       </div>
     </div>
 
@@ -260,7 +277,16 @@
   <!-- 5. Sensor Waveform Area -->
   <div id="waveform-area">
     <div class="wave-header">
-      <span style="font-size:11px; font-weight:bold; color:#00E5FF;">波形系列 (複数選択可能):</span>
+      <div style="display:flex; align-items:center; gap:10px;">
+        <span style="font-size:11px; font-weight:bold; color:#00E5FF;">波形系列:</span>
+        <!-- 表示対象セレクター (A / B / Both) -->
+        <div class="mode-selector" style="font-size:10px;">
+          <button class="mini-btn active-src" id="src-btn-both" onclick="setWaveSource('both')">A & B 重畳比較</button>
+          <button class="mini-btn" id="src-btn-a" onclick="setWaveSource('A')">動画A (自選手) のみ</button>
+          <button class="mini-btn" id="src-btn-b" onclick="setWaveSource('B')">動画B (お手本) のみ</button>
+        </div>
+        <span style="font-size:10px; color:#888; margin-left:4px;">(― 実線: A / --- 破線: B)</span>
+      </div>
       <div class="wave-chips" id="wave-chips-container">
         <!-- JS動的生成 -->
       </div>
@@ -338,8 +364,27 @@
       { id: 'angTotal', label: 'Angle 合成', color: '#FFFFFF', unit: '°', selected: false },
     ];
 
+    // 表示対象セレクター (both: 重畳, A: 自身のみ, B: 比較対象のみ)
+    let waveSource = 'both';
+
+    function setWaveSource(src) {
+      waveSource = src;
+      // 下部パネルのボタン更新
+      document.querySelectorAll('#waveform-area .mini-btn').forEach(b => b.classList.remove('active-src'));
+      const btn = document.getElementById(`src-btn-${src.toLowerCase()}`);
+      if (btn) btn.classList.add('active-src');
+
+      // スコープパネルのボタン更新
+      document.querySelectorAll('#scope-overlay-hud .mini-btn').forEach(b => b.classList.remove('active-src'));
+      const sbtn = document.getElementById(`src-scope-${src.toLowerCase()}`);
+      if (sbtn) sbtn.classList.add('active-src');
+
+      updateUI();
+    }
+
     // サンプルセンサーデータ生成 (100Hz相当: 100件)
-    const sensorData = [];
+    // 1. 動画A用 (自選手)
+    const sensorDataA = [];
     for (let i = 0; i < 100; i++) {
       const t = i * 0.1;
       const ax = Math.sin(t * 2) * 1.5;
@@ -347,17 +392,40 @@
       const az = 1.0 + Math.sin(t * 4) * 0.5;
       const totalG = Math.sqrt(ax * ax + ay * ay + az * az);
 
-      const gx = Math.cos(t * 2) * 300;
-      const gy = Math.sin(t * 3) * 200;
-      const gz = Math.cos(t * 1.5) * 150;
+      const gx = Math.cos(t * 2) * 280;
+      const gy = Math.sin(t * 3) * 190;
+      const gz = Math.cos(t * 1.5) * 140;
       const totalGyr = Math.sqrt(gx * gx + gy * gy + gz * gz);
 
-      const roll = Math.sin(t) * 35;
-      const pitch = Math.cos(t * 1.2) * 25;
+      const roll = Math.sin(t) * 32;
+      const pitch = Math.cos(t * 1.2) * 22;
       const yaw = ((i * 3.6) % 360) - 180;
       const totalAng = Math.sqrt(roll * roll + pitch * pitch + yaw * yaw);
 
-      sensorData.push({ ms: i * 100, ax, ay, az, totalG, gx, gy, gz, totalGyr, roll, pitch, yaw, totalAng });
+      sensorDataA.push({ ms: i * 100, ax, ay, az, totalG, gx, gy, gz, totalGyr, roll, pitch, yaw, totalAng });
+    }
+
+    // 2. 動画B用 (比較対象 / お手本: より鋭いピーク・高回転)
+    const sensorDataB = [];
+    for (let i = 0; i < 100; i++) {
+      const t = i * 0.1;
+      // お手本は踏み込みが鋭く、ピークが大きい
+      const ax = Math.sin(t * 2.1) * 1.9;
+      const ay = Math.cos(t * 2.1) * 1.1;
+      const az = 1.0 + Math.sin(t * 4.2) * 0.8;
+      const totalG = Math.sqrt(ax * ax + ay * ay + az * az);
+
+      const gx = Math.cos(t * 2.1) * 360;
+      const gy = Math.sin(t * 3.1) * 240;
+      const gz = Math.cos(t * 1.6) * 180;
+      const totalGyr = Math.sqrt(gx * gx + gy * gy + gz * gz);
+
+      const roll = Math.sin(t * 1.05) * 40;
+      const pitch = Math.cos(t * 1.25) * 28;
+      const yaw = ((i * 3.8) % 360) - 180;
+      const totalAng = Math.sqrt(roll * roll + pitch * pitch + yaw * yaw);
+
+      sensorDataB.push({ ms: i * 100, ax, ay, az, totalG, gx, gy, gz, totalGyr, roll, pitch, yaw, totalAng });
     }
 
     // 初期化
@@ -528,12 +596,16 @@
       document.querySelector('#athleteB .dummy-limb:first-child').style.transform = `rotate(${ang + 15}deg)`;
       document.querySelector('#athleteB .dummy-limb:last-child').style.transform = `rotate(${-ang - 15}deg)`;
 
-      // 二分探索で最新センサーデータ取得
-      const nearest = findNearestSensor(currentMs);
-      if (nearest) {
-        document.getElementById('hud-g-val').innerText = `${nearest.totalG.toFixed(2)} G`;
-        const pct = Math.min(100, (nearest.totalG / 3.0) * 100);
-        document.getElementById('hud-g-fill').style.width = `${pct}%`;
+      // 二分探索で動画A・動画Bの最新センサーデータ取得
+      const nearestA = findNearestSensor(sensorDataA, currentMs);
+      const nearestB = findNearestSensor(sensorDataB, posB);
+
+      if (nearestA && nearestB) {
+        const diffG = nearestA.totalG - nearestB.totalG;
+        const sign = diffG >= 0 ? '+' : '';
+        document.getElementById('hud-g-val').innerText = `A:${nearestA.totalG.toFixed(2)}G / B:${nearestB.totalG.toFixed(2)}G (Δ${sign}${diffG.toFixed(2)}G)`;
+        const pctA = Math.min(100, (nearestA.totalG / 3.0) * 100);
+        document.getElementById('hud-g-fill').style.width = `${pctA}%`;
       }
 
       // HUD ラップ情報
@@ -639,45 +711,62 @@
       ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)';
       ctx.beginPath(); ctx.moveTo(0, midY); ctx.lineTo(w, midY); ctx.stroke();
 
-      // スコープ内のセンサーデータ
-      const scopeData = sensorData.filter(d => d.ms >= startMs && d.ms <= endMs);
-      let maxScopePeak = 0;
-      let curNearest = findNearestSensor(currentMs);
+      const posB = isSyncLocked ? Math.max(0, currentMs + baseOffsetMs + (manualOffsetSec * 1000)) : currentMs;
+      const startMsB = posB - windowMs;
+      const endMsB = posB + windowMs;
 
-      // 選択波形の描画
-      const activeSeries = WAVE_SERIES.filter(s => s.selected);
-      activeSeries.forEach(series => {
-        ctx.strokeStyle = series.color;
-        ctx.lineWidth = 2;
-        ctx.beginPath();
+      // 1. 動画A (自選手: 実線) の描画
+      if (waveSource === 'both' || waveSource === 'A') {
+        const scopeDataA = sensorDataA.filter(d => d.ms >= startMs && d.ms <= endMs);
+        const activeSeries = WAVE_SERIES.filter(s => s.selected);
+        activeSeries.forEach(series => {
+          ctx.strokeStyle = series.color;
+          ctx.lineWidth = 2.2;
+          ctx.setLineDash([]);
+          ctx.beginPath();
 
-        let scaleY = 30;
-        if (series.id.startsWith('acc')) scaleY = h / 7;
-        else if (series.id.startsWith('gyr')) scaleY = h / 900;
-        else if (series.id.startsWith('ang')) scaleY = h / 380;
+          let scaleY = 30;
+          if (series.id.startsWith('acc')) scaleY = h / 7;
+          else if (series.id.startsWith('gyr')) scaleY = h / 900;
+          else if (series.id.startsWith('ang')) scaleY = h / 380;
 
-        scopeData.forEach((rec, idx) => {
-          const x = ((rec.ms - startMs) / (windowMs * 2)) * w;
-          let val = 0;
-          if (series.id === 'accX') val = rec.ax;
-          else if (series.id === 'accY') val = rec.ay;
-          else if (series.id === 'accZ') val = rec.az;
-          else if (series.id === 'accTotal') { val = rec.totalG; if (val > maxScopePeak) maxScopePeak = val; }
-          else if (series.id === 'gyrX') val = rec.gx;
-          else if (series.id === 'gyrY') val = rec.gy;
-          else if (series.id === 'gyrZ') val = rec.gz;
-          else if (series.id === 'gyrTotal') val = rec.totalGyr;
-          else if (series.id === 'angX') val = rec.roll;
-          else if (series.id === 'angY') val = rec.pitch;
-          else if (series.id === 'angZ') val = rec.yaw;
-          else if (series.id === 'angTotal') val = rec.totalAng;
-
-          const y = Math.max(4, Math.min(h - 4, midY - (val * scaleY)));
-          if (idx === 0) ctx.moveTo(x, y);
-          else ctx.lineTo(x, y);
+          scopeDataA.forEach((rec, idx) => {
+            const x = ((rec.ms - startMs) / (windowMs * 2)) * w;
+            let val = getRecordValue(rec, series.id);
+            const y = Math.max(4, Math.min(h - 4, midY - (val * scaleY)));
+            if (idx === 0) ctx.moveTo(x, y);
+            else ctx.lineTo(x, y);
+          });
+          ctx.stroke();
         });
-        ctx.stroke();
-      });
+      }
+
+      // 2. 動画B (比較対象/お手本: 破線) の描画
+      if (waveSource === 'both' || waveSource === 'B') {
+        const scopeDataB = sensorDataB.filter(d => d.ms >= startMsB && d.ms <= endMsB);
+        const activeSeries = WAVE_SERIES.filter(s => s.selected);
+        activeSeries.forEach(series => {
+          ctx.strokeStyle = series.color;
+          ctx.lineWidth = 1.8;
+          ctx.setLineDash([5, 3]); // 破線
+          ctx.beginPath();
+
+          let scaleY = 30;
+          if (series.id.startsWith('acc')) scaleY = h / 7;
+          else if (series.id.startsWith('gyr')) scaleY = h / 900;
+          else if (series.id.startsWith('ang')) scaleY = h / 380;
+
+          scopeDataB.forEach((rec, idx) => {
+            const x = ((rec.ms - startMsB) / (windowMs * 2)) * w;
+            let val = getRecordValue(rec, series.id);
+            const y = Math.max(4, Math.min(h - 4, midY - (val * scaleY)));
+            if (idx === 0) ctx.moveTo(x, y);
+            else ctx.lineTo(x, y);
+          });
+          ctx.stroke();
+        });
+        ctx.setLineDash([]);
+      }
 
       // 中央 NOW マーカー (赤い現在時刻縦線)
       const centerX = w / 2;
@@ -694,27 +783,49 @@
       ctx.font = 'bold 9px sans-serif';
       ctx.fillText('NOW', centerX - 10, 12);
 
-      // フッター数値更新
-      if (curNearest) {
-        document.getElementById('scope-cur-val').innerText = `${curNearest.totalG.toFixed(2)} G`;
+      // スコープフッター数値更新 (A vs B リアルタイム差分)
+      const curA = findNearestSensor(sensorDataA, currentMs);
+      const curB = findNearestSensor(sensorDataB, posB);
+      if (curA && curB) {
+        document.getElementById('scope-val-a').innerText = `${curA.totalG.toFixed(2)} G`;
+        document.getElementById('scope-val-b').innerText = `${curB.totalG.toFixed(2)} G`;
+        const diff = curA.totalG - curB.totalG;
+        const sign = diff >= 0 ? '+' : '';
+        document.getElementById('scope-diff-val').innerText = `${sign}${diff.toFixed(2)} G (${diff >= 0 ? '自選手大' : 'お手本大'})`;
       }
-      document.getElementById('scope-peak-val').innerText = `${(maxScopePeak || (curNearest ? curNearest.totalG : 0)).toFixed(2)} G`;
     }
 
-    function findNearestSensor(targetMs) {
-      let low = 0, high = sensorData.length - 1;
+    function getRecordValue(rec, seriesId) {
+      if (seriesId === 'accX') return rec.ax;
+      if (seriesId === 'accY') return rec.ay;
+      if (seriesId === 'accZ') return rec.az;
+      if (seriesId === 'accTotal') return rec.totalG;
+      if (seriesId === 'gyrX') return rec.gx;
+      if (seriesId === 'gyrY') return rec.gy;
+      if (seriesId === 'gyrZ') return rec.gz;
+      if (seriesId === 'gyrTotal') return rec.totalGyr;
+      if (seriesId === 'angX') return rec.roll;
+      if (seriesId === 'angY') return rec.pitch;
+      if (seriesId === 'angZ') return rec.yaw;
+      if (seriesId === 'angTotal') return rec.totalAng;
+      return 0;
+    }
+
+    function findNearestSensor(dataList, targetMs) {
+      if (!dataList || dataList.length === 0) return null;
+      let low = 0, high = dataList.length - 1;
       while (low <= high) {
         const mid = (low + high) >> 1;
-        if (sensorData[mid].ms === targetMs) return sensorData[mid];
-        if (sensorData[mid].ms < targetMs) low = mid + 1;
+        if (dataList[mid].ms === targetMs) return dataList[mid];
+        if (dataList[mid].ms < targetMs) low = mid + 1;
         else high = mid - 1;
       }
-      if (low >= sensorData.length) return sensorData[high];
-      if (high < 0) return sensorData[low];
-      return Math.abs(sensorData[low].ms - targetMs) < Math.abs(sensorData[high].ms - targetMs) ? sensorData[low] : sensorData[high];
+      if (low >= dataList.length) return dataList[high];
+      if (high < 0) return dataList[low];
+      return Math.abs(dataList[low].ms - targetMs) < Math.abs(dataList[high].ms - targetMs) ? dataList[low] : dataList[high];
     }
 
-    // --- 波形キャンバス描画 ---
+    // --- 波形キャンバス描画 (下部メインパネル) ---
     function drawWaveform() {
       const canvas = document.getElementById('wave-canvas');
       const ctx = canvas.getContext('2d');
@@ -730,54 +841,89 @@
       ctx.moveTo(0, midY); ctx.lineTo(w, midY);
       ctx.stroke();
 
-      // 各選択波形描画
-      WAVE_SERIES.filter(s => s.selected).forEach(series => {
-        ctx.strokeStyle = series.color;
-        ctx.lineWidth = series.id.includes('Total') ? 2.0 : 1.2;
+      const activeSeries = WAVE_SERIES.filter(s => s.selected);
+
+      // 1. 動画Aの波形描画 (自選手: 実線)
+      if (waveSource === 'both' || waveSource === 'A') {
+        activeSeries.forEach(series => {
+          ctx.strokeStyle = series.color;
+          ctx.lineWidth = series.id.includes('Total') ? 2.2 : 1.2;
+          ctx.setLineDash([]);
+          ctx.beginPath();
+
+          let scaleY = 16.0;
+          if (series.unit === '°/s') scaleY = 0.08;
+          if (series.unit === '°') scaleY = 0.25;
+
+          for (let i = 0; i < sensorDataA.length; i++) {
+            const rec = sensorDataA[i];
+            const x = (rec.ms / totalMs) * w;
+            const val = getRecordValue(rec, series.id);
+            const y = Math.max(2, Math.min(h - 2, midY - (val * scaleY)));
+            if (i === 0) ctx.moveTo(x, y);
+            else ctx.lineTo(x, y);
+          }
+          ctx.stroke();
+        });
+      }
+
+      // 2. 動画Bの波形描画 (比較対象/お手本: 破線)
+      if (waveSource === 'both' || waveSource === 'B') {
+        activeSeries.forEach(series => {
+          ctx.strokeStyle = series.color;
+          ctx.lineWidth = series.id.includes('Total') ? 1.8 : 1.0;
+          ctx.setLineDash([5, 3]); // 破線
+          ctx.beginPath();
+
+          let scaleY = 16.0;
+          if (series.unit === '°/s') scaleY = 0.08;
+          if (series.unit === '°') scaleY = 0.25;
+
+          for (let i = 0; i < sensorDataB.length; i++) {
+            const rec = sensorDataB[i];
+            const x = (rec.ms / totalMs) * w;
+            const val = getRecordValue(rec, series.id);
+            const y = Math.max(2, Math.min(h - 2, midY - (val * scaleY)));
+            if (i === 0) ctx.moveTo(x, y);
+            else ctx.lineTo(x, y);
+          }
+          ctx.stroke();
+        });
+        ctx.setLineDash([]);
+      }
+
+      // 再生ヘッド A (黄色縦ライン: 自選手)
+      if (waveSource === 'both' || waveSource === 'A') {
+        const headXA = (currentMs / totalMs) * w;
+        ctx.strokeStyle = '#FFD600';
+        ctx.lineWidth = 2;
         ctx.beginPath();
-
-        let scaleY = 16.0;
-        if (series.unit === '°/s') scaleY = 0.08;
-        if (series.unit === '°') scaleY = 0.25;
-
-        for (let i = 0; i < sensorData.length; i++) {
-          const rec = sensorData[i];
-          const x = (rec.ms / totalMs) * w;
-          let val = 0;
-          if (series.id === 'accX') val = rec.ax;
-          else if (series.id === 'accY') val = rec.ay;
-          else if (series.id === 'accZ') val = rec.az;
-          else if (series.id === 'accTotal') val = rec.totalG;
-          else if (series.id === 'gyrX') val = rec.gx;
-          else if (series.id === 'gyrY') val = rec.gy;
-          else if (series.id === 'gyrZ') val = rec.gz;
-          else if (series.id === 'gyrTotal') val = rec.totalGyr;
-          else if (series.id === 'angX') val = rec.roll;
-          else if (series.id === 'angY') val = rec.pitch;
-          else if (series.id === 'angZ') val = rec.yaw;
-          else if (series.id === 'angTotal') val = rec.totalAng;
-
-          const y = Math.max(2, Math.min(h - 2, midY - (val * scaleY)));
-          if (i === 0) ctx.moveTo(x, y);
-          else ctx.lineTo(x, y);
-        }
+        ctx.moveTo(headXA, 0); ctx.lineTo(headXA, h);
         ctx.stroke();
-      });
 
-      // 再生ヘッド (黄色縦ライン)
-      const headX = (currentMs / totalMs) * w;
-      ctx.strokeStyle = '#FFD600';
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.moveTo(headX, 0); ctx.lineTo(headX, h);
-      ctx.stroke();
+        ctx.fillStyle = '#FFD600';
+        ctx.beginPath();
+        ctx.moveTo(headXA - 5, 0); ctx.lineTo(headXA + 5, 0); ctx.lineTo(headXA, 7);
+        ctx.fill();
+      }
 
-      // 三角マーカー
-      ctx.fillStyle = '#FFD600';
-      ctx.beginPath();
-      ctx.moveTo(headX - 5, 0); ctx.lineTo(headX + 5, 0); ctx.lineTo(headX, 7);
-      ctx.fill();
-    }
+      // 再生ヘッド B (赤色破線縦ライン: お手本の同期位置)
+      if (waveSource === 'both' || waveSource === 'B') {
+        const posB = isSyncLocked ? Math.max(0, currentMs + baseOffsetMs + (manualOffsetSec * 1000)) : currentMs;
+        const headXB = (posB / totalMs) * w;
+        ctx.strokeStyle = '#FF5252';
+        ctx.lineWidth = 1.8;
+        ctx.setLineDash([4, 2]);
+        ctx.beginPath();
+        ctx.moveTo(headXB, 0); ctx.lineTo(headXB, h);
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        ctx.fillStyle = '#FF5252';
+        ctx.beginPath();
+        ctx.moveTo(headXB - 5, h); ctx.lineTo(headXB + 5, h); ctx.lineTo(headXB, h - 7);
+        ctx.fill();
+      }
 
     // 波形キャンバスクリックでシーク
     document.getElementById('wave-canvas').onclick = e => {
