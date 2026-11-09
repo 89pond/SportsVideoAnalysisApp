@@ -53,7 +53,7 @@
     #waveform-area { flex: 3; background: #121418; display: flex; flex-direction: column; position: relative; border-top: 1px solid rgba(255,255,255,0.06); transition: all 0.25s ease; }
     #waveform-area.collapsed { display: none; }
 
-    /* HUD Scope Overlay (スマホ横向き向け波形オーバーレイ) */
+    /* HUD Scope Overlay (スマホ横向き向け波形オーバーレイ: 単一画面時) */
     #scope-overlay-hud {
       position: absolute;
       top: 12px;
@@ -71,6 +71,42 @@
       flex-direction: column;
       overflow: hidden;
       transition: right 0.2s, left 0.2s, opacity 0.2s;
+    }
+
+    /* 動画の映像の上に直接透過オーバーレイする波形レイヤー */
+    .video-direct-wave-overlay {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: 110px;
+      pointer-events: none;
+      z-index: 12;
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-end;
+      padding: 6px 10px;
+      background: linear-gradient(to top, rgba(0,0,0,0.65) 0%, rgba(0,0,0,0.15) 70%, transparent 100%);
+    }
+    .direct-wave-tag {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 10px;
+      color: #00E5FF;
+      font-weight: bold;
+      margin-bottom: 2px;
+      text-shadow: 0 1px 3px rgba(0,0,0,0.9);
+    }
+    .direct-wave-tag.b-tag {
+      color: #FF7043;
+    }
+    .direct-val {
+      font-family: monospace;
+      background: rgba(0,0,0,0.6);
+      padding: 1px 6px;
+      border-radius: 4px;
+      border: 1px solid currentColor;
     }
     #scope-overlay-hud.pos-left {
       right: auto;
@@ -209,9 +245,9 @@
       </div>
     </div>
 
-    <!-- Video A -->
+    <!-- Video A (過去の大会) -->
     <div class="video-box" id="boxA" style="color: #00E5FF;">
-      <div class="video-badge">動画 A (自選手) <span id="timeA" style="margin-left:6px; color:#fff; font-family:monospace;">00:00.00</span></div>
+      <div class="video-badge">動画 A (過去の大会) <span id="timeA" style="margin-left:6px; color:#fff; font-family:monospace;">00:00.00</span></div>
       <div class="dummy-athlete" id="athleteA">
         <div class="dummy-head"></div>
         <div class="dummy-body">
@@ -219,17 +255,33 @@
           <div class="dummy-limb" style="transform: rotate(-35deg); right: -10px;"></div>
         </div>
       </div>
+      <!-- 動画Aの上に直接透過オーバーレイする波形レイヤー -->
+      <div class="video-direct-wave-overlay" id="overlay-wave-a">
+        <div class="direct-wave-tag">
+          <span>📊 過去大会 加速度波形 (±2s)</span>
+          <span id="direct-val-a" class="direct-val">1.85 G</span>
+        </div>
+        <canvas id="canvas-direct-wave-a" style="width:100%; height:80px;"></canvas>
+      </div>
     </div>
 
-    <!-- Video B -->
+    <!-- Video B (今回の大会) -->
     <div class="video-box" id="boxB" style="color: #FF5252;">
-      <div class="video-badge b">動画 B (お手本) <span id="timeB" style="margin-left:6px; color:#fff; font-family:monospace;">00:00.60</span></div>
+      <div class="video-badge b" style="border-color:#FF7043; color:#FF7043;">動画 B (今回の大会) <span id="timeB" style="margin-left:6px; color:#fff; font-family:monospace;">00:00.60</span></div>
       <div class="dummy-athlete" id="athleteB">
         <div class="dummy-head"></div>
         <div class="dummy-body">
           <div class="dummy-limb" style="transform: rotate(40deg); left: -12px;"></div>
           <div class="dummy-limb" style="transform: rotate(-20deg); right: -12px;"></div>
         </div>
+      </div>
+      <!-- 動画Bの上に直接透過オーバーレイする波形レイヤー -->
+      <div class="video-direct-wave-overlay" id="overlay-wave-b">
+        <div class="direct-wave-tag b-tag">
+          <span>📊 今回大会 加速度波形 (±2s)</span>
+          <span id="direct-val-b" class="direct-val">2.27 G</span>
+        </div>
+        <canvas id="canvas-direct-wave-b" style="width:100%; height:80px;"></canvas>
       </div>
     </div>
 
@@ -457,6 +509,19 @@
         sCanvas.height = sCanvas.parentElement.clientHeight - 62;
         if (isScopeOverlay) drawScopeWaveform();
       }
+
+      // ダイレクトオーバーレイキャンバスのリサイズ
+      const cda = document.getElementById('canvas-direct-wave-a');
+      if (cda) {
+        cda.width = cda.clientWidth;
+        cda.height = cda.clientHeight;
+      }
+      const cdb = document.getElementById('canvas-direct-wave-b');
+      if (cdb) {
+        cdb.width = cdb.clientWidth;
+        cdb.height = cdb.clientHeight;
+      }
+      drawDirectWaveOverlays();
     }
 
     // --- 波形チップ生成 ---
@@ -622,6 +687,88 @@
 
       drawWaveform();
       if (isScopeOverlay) drawScopeWaveform();
+      drawDirectWaveOverlays();
+    }
+
+    // --- 動画映像の上に直接波形をオーバーレイ描画 ---
+    function drawDirectWaveOverlays() {
+      const cda = document.getElementById('canvas-direct-wave-a');
+      const cdb = document.getElementById('canvas-direct-wave-b');
+      if (!cda || !cdb) return;
+
+      const posB = isSyncLocked ? Math.max(0, currentMs + baseOffsetMs + (manualOffsetSec * 1000)) : currentMs;
+      const windowMs = 2000; // 前後±2.0秒
+
+      function renderSingleOverlay(canvas, dataList, targetMs, color, valElementId) {
+        const ctx = canvas.getContext('2d');
+        const w = canvas.width;
+        const h = canvas.height;
+        ctx.clearRect(0, 0, w, h);
+
+        const startMs = targetMs - windowMs;
+        const endMs = targetMs + windowMs;
+
+        // 基準線 (点線)
+        const midY = h * 0.65;
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
+        ctx.lineWidth = 1;
+        ctx.setLineDash([2, 4]);
+        ctx.beginPath();
+        ctx.moveTo(0, midY); ctx.lineTo(w, midY);
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        // 波形データ抽出
+        const filtered = dataList.filter(d => d.ms >= startMs && d.ms <= endMs);
+        if (filtered.length === 0) return;
+
+        // 波形ライン (発光調)
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 2.6;
+        ctx.shadowColor = color;
+        ctx.shadowBlur = 6;
+        ctx.beginPath();
+
+        const scaleY = h / 5.5;
+        filtered.forEach((rec, idx) => {
+          const x = ((rec.ms - startMs) / (windowMs * 2)) * w;
+          const val = rec.totalG;
+          const y = Math.max(2, Math.min(h - 2, midY - ((val - 1.0) * scaleY)));
+          if (idx === 0) ctx.moveTo(x, y);
+          else ctx.lineTo(x, y);
+        });
+        ctx.stroke();
+        ctx.shadowBlur = 0;
+
+        // 中央 NOW マーカー
+        const centerX = w / 2;
+        ctx.strokeStyle = '#FF5252';
+        ctx.lineWidth = 2;
+        ctx.setLineDash([3, 2]);
+        ctx.beginPath();
+        ctx.moveTo(centerX, 0); ctx.lineTo(centerX, h);
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        // 現在値ドット
+        const nearest = findNearestSensor(dataList, targetMs);
+        if (nearest) {
+          const curY = Math.max(2, Math.min(h - 2, midY - ((nearest.totalG - 1.0) * scaleY)));
+          ctx.fillStyle = '#FF5252';
+          ctx.beginPath();
+          ctx.arc(centerX, curY, 4.5, 0, Math.PI * 2);
+          ctx.fill();
+
+          const valEl = document.getElementById(valElementId);
+          if (valEl) valEl.innerText = `${nearest.totalG.toFixed(2)} G`;
+        }
+      }
+
+      // 左動画Aの上に波形Aをオーバーレイ (シアン色)
+      renderSingleOverlay(cda, sensorDataA, currentMs, '#00E5FF', 'direct-val-a');
+
+      // 右動画Bの上に波形Bをオーバーレイ (オレンジ色)
+      renderSingleOverlay(cdb, sensorDataB, posB, '#FF7043', 'direct-val-b');
     }
 
     // --- スコープHUDオーバーレイ制御 ---
