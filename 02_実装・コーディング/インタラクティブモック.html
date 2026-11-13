@@ -3,1263 +3,771 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>MotionSync Analytics - インタラクティブ動作モック</title>
+  <title>MotionSync Analytics - 左右2画面 デュアル動作分析モック</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; }
-    body { background: #121418; color: #fff; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
-    
-    /* Header */
-    header { background: #1E222B; height: 50px; display: flex; align-items: center; justify-content: space-between; padding: 0 16px; border-bottom: 1px solid rgba(255,255,255,0.08); }
-    .logo-area { display: flex; align-items: center; gap: 8px; font-weight: bold; font-size: 15px; color: #00E5FF; }
-    .mode-selector { display: flex; background: #262C38; border-radius: 6px; padding: 2px; gap: 2px; }
-    .mode-btn { background: transparent; border: none; color: #aaa; padding: 5px 12px; font-size: 11px; border-radius: 4px; cursor: pointer; transition: 0.2s; }
-    .mode-btn.active { background: #00E5FF; color: #000; font-weight: bold; }
-    .menu-btn { background: #262C38; border: 1px solid rgba(255,255,255,0.1); color: #00E5FF; border-radius: 4px; padding: 6px 12px; font-size: 11px; cursor: pointer; }
-
-    /* Video Viewport */
-    #viewport-container { flex: 5; position: relative; background: #0A0C10; overflow: hidden; display: flex; }
-    .video-box { flex: 1; position: relative; display: flex; align-items: center; justify-content: center; border-right: 1px solid rgba(255,255,255,0.1); background: #14171E; }
-    .video-badge { position: absolute; top: 10px; left: 10px; background: rgba(0,0,0,0.8); border: 1px solid #00E5FF; color: #00E5FF; font-size: 11px; font-weight: bold; padding: 3px 8px; border-radius: 4px; pointer-events: none; z-index: 5; }
-    .video-badge.b { border-color: #FF5252; color: #FF5252; }
-    .dummy-athlete { width: 120px; height: 180px; position: relative; border-radius: 8px; display: flex; flex-direction: column; align-items: center; justify-content: center; }
-    .dummy-head { width: 28px; height: 28px; background: currentColor; border-radius: 50%; margin-bottom: 8px; }
-    .dummy-body { width: 6px; height: 60px; background: currentColor; border-radius: 3px; position: relative; }
-    .dummy-limb { position: absolute; width: 4px; height: 45px; background: currentColor; transform-origin: top center; border-radius: 2px; }
-
-    /* Ghost Overlay slider */
-    #ghost-slider-panel { position: absolute; top: 10px; right: 10px; background: rgba(0,0,0,0.85); border: 1px solid #7C4DFF; border-radius: 20px; padding: 4px 12px; display: none; align-items: center; gap: 8px; z-index: 10; font-size: 11px; }
-
-    /* Annotation Canvas */
-    #draw-canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 8; cursor: crosshair; }
-
-    /* Playback Bar */
-    #playback-bar { background: #262C38; padding: 6px 16px; display: flex; flex-direction: column; gap: 4px; border-top: 1px solid rgba(255,255,255,0.08); }
-    .seek-row { display: flex; align-items: center; gap: 12px; font-family: monospace; font-size: 12px; color: #00E5FF; }
-    .seek-slider { flex: 1; accent-color: #00E5FF; cursor: pointer; }
-    .ctrl-row { display: flex; align-items: center; justify-content: space-between; }
-    .btn { background: #1E222B; border: 1px solid rgba(255,255,255,0.15); color: #fff; padding: 5px 10px; font-size: 11px; border-radius: 4px; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; }
-    .btn.active-lock { border-color: #00E676; color: #00E676; }
-    .play-circle { width: 32px; height: 32px; border-radius: 50%; background: #00E5FF; color: #000; border: none; font-size: 16px; font-weight: bold; cursor: pointer; display: flex; align-items: center; justify-content: center; }
-
-    /* HUD Bar */
-    #hud-bar { background: #1E222B; padding: 6px 16px; display: flex; align-items: center; justify-content: space-between; border-top: 1px solid rgba(255,255,255,0.06); }
-    .hud-lap { background: rgba(0,229,255,0.15); border: 1px solid #00E5FF; color: #00E5FF; padding: 3px 8px; border-radius: 4px; font-weight: bold; font-size: 12px; }
-    .hud-diff { font-weight: bold; font-size: 12px; color: #00E676; margin-left: 10px; }
-    .hud-gauge { display: flex; align-items: center; gap: 8px; font-size: 12px; color: #FFD600; font-weight: bold; }
-    .gauge-bar { width: 70px; height: 8px; background: rgba(255,255,255,0.1); border-radius: 4px; overflow: hidden; }
-    .gauge-fill { height: 100%; background: #FFD600; width: 45%; transition: width 0.1s; }
-
-    /* Waveform Area */
-    #waveform-area { flex: 3; background: #121418; display: flex; flex-direction: column; position: relative; border-top: 1px solid rgba(255,255,255,0.06); transition: all 0.25s ease; }
-    #waveform-area.collapsed { display: none; }
-
-    /* HUD Scope Overlay (スマホ横向き向け波形オーバーレイ: 単一画面時) */
-    #scope-overlay-hud {
-      position: absolute;
-      top: 12px;
-      bottom: 12px;
-      right: 12px;
-      width: 320px;
-      background: rgba(15, 18, 24, 0.82);
-      backdrop-filter: blur(8px);
-      -webkit-backdrop-filter: blur(8px);
-      border: 1px solid rgba(0, 229, 255, 0.35);
-      border-radius: 8px;
-      box-shadow: 0 8px 32px rgba(0,0,0,0.6);
-      z-index: 25;
-      display: none;
-      flex-direction: column;
+    body {
+      background: #000;
+      color: #fff;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      width: 100vw;
+      height: 100vh;
       overflow: hidden;
-      transition: right 0.2s, left 0.2s, opacity 0.2s;
+      display: flex;
+      flex-direction: column;
     }
 
-    /* 動画の映像の上に直接透過オーバーレイする波形レイヤー */
-    .video-direct-wave-overlay {
+    /* 最上部 ミニマル情報ヘッダー */
+    #top-bar {
       position: absolute;
-      bottom: 0;
+      top: 0;
       left: 0;
       right: 0;
-      height: 110px;
+      height: 44px;
+      background: linear-gradient(to bottom, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0.4) 70%, transparent 100%);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 16px;
+      z-index: 40;
+      transition: opacity 0.3s ease, transform 0.3s ease;
+    }
+    #top-bar.hidden-ui {
+      opacity: 0;
+      transform: translateY(-20px);
       pointer-events: none;
-      z-index: 12;
-      display: flex;
-      flex-direction: column;
-      justify-content: flex-end;
-      padding: 6px 10px;
-      background: linear-gradient(to top, rgba(0,0,0,0.65) 0%, rgba(0,0,0,0.15) 70%, transparent 100%);
     }
-    .direct-wave-tag {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      font-size: 10px;
-      color: #00E5FF;
-      font-weight: bold;
-      margin-bottom: 2px;
-      text-shadow: 0 1px 3px rgba(0,0,0,0.9);
-    }
-    .direct-wave-tag.b-tag {
-      color: #FF7043;
-    }
-    .direct-val {
-      font-family: monospace;
-      background: rgba(0,0,0,0.6);
-      padding: 1px 6px;
-      border-radius: 4px;
-      border: 1px solid currentColor;
-    }
-    #scope-overlay-hud.pos-left {
-      right: auto;
-      left: 12px;
-    }
-    .scope-header {
-      background: rgba(255,255,255,0.06);
-      padding: 6px 10px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      border-bottom: 1px solid rgba(255,255,255,0.08);
-      font-size: 11px;
-    }
-    .scope-title {
-      font-weight: bold;
+    .app-title {
+      font-size: 13px;
+      font-weight: 800;
+      letter-spacing: 0.5px;
       color: #00E5FF;
       display: flex;
       align-items: center;
       gap: 6px;
     }
-    .scope-ctrls {
-      display: flex;
-      gap: 4px;
-      align-items: center;
+    .diff-badge {
+      background: rgba(255, 214, 0, 0.15);
+      border: 1px solid rgba(255, 214, 0, 0.4);
+      color: #FFD600;
+      font-size: 11px;
+      font-weight: bold;
+      font-family: monospace;
+      padding: 3px 10px;
+      border-radius: 20px;
+      backdrop-filter: blur(4px);
     }
-    .mini-btn {
+    .top-actions {
+      display: flex;
+      gap: 8px;
+    }
+    .top-btn {
+      background: rgba(255,255,255,0.12);
+      border: 1px solid rgba(255,255,255,0.2);
+      color: #fff;
+      font-size: 11px;
+      padding: 4px 10px;
+      border-radius: 4px;
+      cursor: pointer;
+      backdrop-filter: blur(4px);
+      transition: 0.2s;
+    }
+    .top-btn:hover { background: rgba(0,229,255,0.25); border-color: #00E5FF; }
+
+    /* メイン 2画面スプリットビューポート (画面全体100%) */
+    #viewport-container {
+      flex: 1;
+      width: 100%;
+      height: 100%;
+      position: relative;
+      display: flex;
+      background: #05070A;
+      cursor: default;
+    }
+
+    /* 各画面 (左: 過去大会 / 右: 今回大会) */
+    .screen-half {
+      flex: 1;
+      height: 100%;
+      position: relative;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+    .screen-half.left-screen {
+      border-right: 1px solid rgba(255,255,255,0.15);
+    }
+
+    /* 背景の動画映像キャンバス */
+    .video-canvas {
+      width: 100%;
+      height: 100%;
+      position: absolute;
+      top: 0;
+      left: 0;
+      z-index: 1;
+    }
+
+    /* 映像上のバッジ (動画タイトル・タイムコード) */
+    .video-header-badge {
+      position: absolute;
+      top: 50px;
+      left: 14px;
+      z-index: 20;
+      background: rgba(0, 0, 0, 0.65);
+      backdrop-filter: blur(8px);
+      border: 1px solid rgba(0, 229, 255, 0.6);
+      color: #00E5FF;
+      font-size: 11px;
+      font-weight: bold;
+      padding: 3px 10px;
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.5);
+      transition: opacity 0.3s;
+    }
+    .video-header-badge.b {
+      border-color: rgba(255, 112, 67, 0.7);
+      color: #FF7043;
+    }
+    .video-time-badge {
+      position: absolute;
+      top: 50px;
+      right: 14px;
+      z-index: 20;
+      background: rgba(0, 0, 0, 0.65);
+      backdrop-filter: blur(8px);
+      font-family: monospace;
+      font-size: 12px;
+      color: #fff;
+      padding: 3px 8px;
+      border-radius: 4px;
+      border: 1px solid rgba(255,255,255,0.15);
+      transition: opacity 0.3s;
+    }
+    .hidden-ui .video-header-badge,
+    .hidden-ui .video-time-badge {
+      opacity: 0.2;
+    }
+
+    /* 映像の上に直接透過オーバーレイする波形レイヤー */
+    .wave-overlay-layer {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: 140px;
+      z-index: 10;
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-end;
+      padding: 8px 14px;
+      background: linear-gradient(to top, rgba(0,0,0,0.7) 0%, rgba(0,0,0,0.15) 75%, transparent 100%);
+      pointer-events: auto;
+      cursor: ew-resize;
+    }
+    .wave-tag-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 11px;
+      font-weight: bold;
+      margin-bottom: 4px;
+      text-shadow: 0 1px 4px rgba(0,0,0,0.9);
+      pointer-events: none;
+    }
+    .wave-val-pill {
+      font-family: monospace;
+      font-size: 11px;
+      background: rgba(0,0,0,0.7);
+      padding: 2px 8px;
+      border-radius: 4px;
+      border: 1px solid currentColor;
+    }
+    .wave-canvas {
+      width: 100%;
+      height: 90px;
+      pointer-events: none;
+    }
+
+    /* 個別調整モード（🔓）時に現れる左右独立コマ送りボタン */
+    .individual-ctrl-bar {
+      position: absolute;
+      bottom: 148px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(15, 20, 28, 0.88);
+      backdrop-filter: blur(12px);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      border-radius: 20px;
+      padding: 4px 10px;
+      display: none;
+      align-items: center;
+      gap: 8px;
+      z-index: 30;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.6);
+      animation: fadeIn 0.2s ease;
+    }
+    .individual-ctrl-bar.active {
+      display: flex;
+    }
+    .ind-btn {
       background: rgba(255,255,255,0.1);
       border: 1px solid rgba(255,255,255,0.2);
       color: #fff;
-      font-size: 10px;
-      padding: 2px 6px;
-      border-radius: 3px;
+      font-size: 11px;
+      padding: 4px 10px;
+      border-radius: 12px;
       cursor: pointer;
     }
-    .mini-btn:hover { background: rgba(0,229,255,0.2); border-color: #00E5FF; }
-    .mini-btn.active-src {
+    .ind-btn:hover { background: rgba(0,229,255,0.3); border-color: #00E5FF; }
+
+    /* 中央下部に浮かぶ「極小スリガラス調ピルHUD」 */
+    #floating-pill-hud {
+      position: absolute;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(15, 20, 30, 0.85);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+      border: 1px solid rgba(0, 229, 255, 0.35);
+      border-radius: 30px;
+      padding: 6px 14px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      z-index: 50;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.7);
+      transition: opacity 0.3s ease, transform 0.3s ease;
+    }
+    #floating-pill-hud.hidden-ui {
+      opacity: 0;
+      transform: translate(-50%, 25px);
+      pointer-events: none;
+    }
+    .pill-btn {
+      background: rgba(255,255,255,0.1);
+      border: 1px solid rgba(255,255,255,0.18);
+      color: #fff;
+      padding: 6px 12px;
+      font-size: 12px;
+      border-radius: 20px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      transition: 0.15s;
+    }
+    .pill-btn:hover { background: rgba(0,229,255,0.25); border-color: #00E5FF; }
+    .pill-btn.primary {
       background: #00E5FF;
       color: #000;
       font-weight: bold;
       border-color: #00E5FF;
+      padding: 6px 16px;
     }
-    #scope-canvas {
-      flex: 1;
-      width: 100%;
-      height: 100%;
-    }
-    .scope-footer {
-      background: rgba(0,0,0,0.4);
-      padding: 4px 8px;
-      font-size: 10px;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      border-top: 1px solid rgba(255,255,255,0.05);
-      color: #aaa;
-    }
-    .scope-val-badge {
-      font-family: monospace;
-      color: #00E5FF;
+    .pill-btn.primary:hover { background: #6effff; }
+    .pill-btn.lock-active {
+      background: rgba(0, 230, 118, 0.2);
+      border-color: #00E676;
+      color: #00E676;
       font-weight: bold;
     }
-    .wave-header { display: flex; align-items: center; justify-content: space-between; padding: 4px 12px; background: #161920; }
-    .wave-chips { display: flex; gap: 6px; overflow-x: auto; padding: 2px 0; }
-    .chip { font-size: 10px; padding: 2px 8px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.2); background: rgba(255,255,255,0.05); color: #888; cursor: pointer; display: flex; align-items: center; gap: 4px; white-space: nowrap; }
-    .chip.selected { border-color: currentColor; font-weight: bold; background: rgba(255,255,255,0.12); }
-    .dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
-    #wave-canvas { width: 100%; height: 100%; cursor: pointer; }
+    .pill-btn.unlock-active {
+      background: rgba(255, 82, 82, 0.2);
+      border-color: #FF5252;
+      color: #FF5252;
+      font-weight: bold;
+    }
 
-    /* Bottom Toolbar */
-    #bottom-toolbar { background: #1E222B; padding: 6px 12px; display: flex; flex-direction: column; gap: 6px; border-top: 1px solid rgba(255,255,255,0.08); }
-    .tool-row { display: flex; align-items: center; justify-content: space-between; }
-    .tool-group { display: flex; gap: 4px; align-items: center; }
-    .tool-btn { background: #262C38; border: 1px solid rgba(255,255,255,0.1); color: #aaa; padding: 4px 10px; font-size: 11px; border-radius: 4px; cursor: pointer; }
-    .tool-btn.active { background: #FFD600; color: #000; font-weight: bold; border-color: #FFD600; }
-    .color-dot { width: 16px; height: 16px; border-radius: 50%; cursor: pointer; border: 2px solid transparent; }
-    .color-dot.active { border-color: #fff; }
+    /* フルスクリーン没入ヒント */
+    #fullscreen-hint {
+      position: absolute;
+      bottom: 6px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 10px;
+      color: rgba(255,255,255,0.35);
+      z-index: 40;
+      pointer-events: none;
+      transition: opacity 0.3s;
+    }
+    .hidden-ui #fullscreen-hint {
+      opacity: 0;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translate(-50%, 8px); }
+      to { opacity: 1; transform: translate(-50%, 0); }
+    }
   </style>
 </head>
 <body>
 
-  <!-- 1. Header -->
-  <header>
-    <div class="logo-area">
-      <span>⚡ MotionSync Analytics</span>
-      <span style="font-size: 11px; color: #888; margin-left: 8px;">(石井 更紗 - 秋季記録会)</span>
+  <!-- 1. 最上部 ミニマル情報ヘッダー -->
+  <div id="top-bar">
+    <div class="app-title">
+      <span>⚡ MotionSync</span>
+      <span style="color:#aaa; font-size:11px; font-weight:normal;">| 左右2画面 デュアル比較</span>
     </div>
-    <div class="mode-selector">
-      <button class="mode-btn" onclick="setViewMode('single')">1画面</button>
-      <button class="mode-btn active" onclick="setViewMode('split')">並列比較</button>
-      <button class="mode-btn" onclick="setViewMode('ghost')">透過ゴースト</button>
+    <div class="diff-badge" id="diff-badge">
+      踏み込み差: +0.42G (今回が強力)
     </div>
-    <div style="display:flex; gap:6px;">
-      <button class="menu-btn" id="hud-overlay-btn" onclick="toggleScopeOverlay()" style="background:#262C38; border-color:#00E5FF; color:#00E5FF; font-weight:bold;">📱 HUDオーバーレイ: OFF</button>
-      <button class="menu-btn" onclick="saveProjectJson()">💾 保存</button>
-      <button class="menu-btn" onclick="capturePng()">📸 PNG保存</button>
-    </div>
-  </header>
-
-  <!-- 2. Video Viewport -->
-  <div id="viewport-container">
-    <div id="ghost-slider-panel">
-      <span>透過度: <span id="ghost-val">50%</span></span>
-      <input type="range" id="ghost-range" min="0" max="100" value="50" oninput="updateGhost(this.value)" style="width:90px; accent-color:#7C4DFF;">
-    </div>
-
-    <!-- HUD Scope Overlay (スマホ横向き向け波形オーバーレイ) -->
-    <div id="scope-overlay-hud">
-      <div class="scope-header">
-        <div class="scope-title">
-          <span>📊 波形スコープ</span>
-          <span id="scope-range-badge" style="color:#aaa; font-weight:normal; font-size:10px;">(±2.0秒)</span>
-        </div>
-        <div class="scope-ctrls">
-          <div class="mode-selector" style="font-size:9px; margin-right:4px;">
-            <button class="mini-btn active-src" id="src-scope-both" onclick="setWaveSource('both')">A&B重畳</button>
-            <button class="mini-btn" id="src-scope-a" onclick="setWaveSource('A')">A自身</button>
-            <button class="mini-btn" id="src-scope-b" onclick="setWaveSource('B')">B比較</button>
-          </div>
-          <button class="mini-btn" onclick="cycleScopeWindow()" title="表示秒数切替"><span id="btn-sec-val">±2s</span></button>
-          <button class="mini-btn" onclick="toggleScopePosition()" title="左右位置反転">⇄</button>
-          <button class="mini-btn" onclick="toggleScopeOpacity()" title="透過度切替">半透明</button>
-          <button class="mini-btn" onclick="toggleScopeOverlay()" style="color:#FF5252;">✕</button>
-        </div>
-      </div>
-      <canvas id="scope-canvas"></canvas>
-      <div class="scope-footer" style="flex-direction:column; gap:2px; font-size:9px;">
-        <div style="display:flex; justify-content:space-between; width:100%;">
-          <span>自選手 A: <span id="scope-val-a" style="color:#00E5FF; font-family:monospace; font-weight:bold;">0.00 G</span></span>
-          <span>お手本 B: <span id="scope-val-b" style="color:#FF5252; font-family:monospace; font-weight:bold;">0.00 G</span></span>
-        </div>
-        <div style="display:flex; justify-content:space-between; width:100%; border-top:1px dashed rgba(255,255,255,0.1); padding-top:2px;">
-          <span>差分 Δ(A-B): <span id="scope-diff-val" style="color:#FFD600; font-family:monospace; font-weight:bold;">0.00 G</span></span>
-          <span style="color:#888;">実線=A / 破線=B</span>
-        </div>
-      </div>
-    </div>
-
-    <!-- Video A (過去の大会) -->
-    <div class="video-box" id="boxA" style="color: #00E5FF;">
-      <div class="video-badge">動画 A (過去の大会) <span id="timeA" style="margin-left:6px; color:#fff; font-family:monospace;">00:00.00</span></div>
-      <div class="dummy-athlete" id="athleteA">
-        <div class="dummy-head"></div>
-        <div class="dummy-body">
-          <div class="dummy-limb" style="transform: rotate(25deg); left: -10px;"></div>
-          <div class="dummy-limb" style="transform: rotate(-35deg); right: -10px;"></div>
-        </div>
-      </div>
-      <!-- 動画Aの上に直接透過オーバーレイする波形レイヤー -->
-      <div class="video-direct-wave-overlay" id="overlay-wave-a">
-        <div class="direct-wave-tag">
-          <span>📊 過去大会 加速度波形 (±2s)</span>
-          <span id="direct-val-a" class="direct-val">1.85 G</span>
-        </div>
-        <canvas id="canvas-direct-wave-a" style="width:100%; height:80px;"></canvas>
-      </div>
-    </div>
-
-    <!-- Video B (今回の大会) -->
-    <div class="video-box" id="boxB" style="color: #FF5252;">
-      <div class="video-badge b" style="border-color:#FF7043; color:#FF7043;">動画 B (今回の大会) <span id="timeB" style="margin-left:6px; color:#fff; font-family:monospace;">00:00.60</span></div>
-      <div class="dummy-athlete" id="athleteB">
-        <div class="dummy-head"></div>
-        <div class="dummy-body">
-          <div class="dummy-limb" style="transform: rotate(40deg); left: -12px;"></div>
-          <div class="dummy-limb" style="transform: rotate(-20deg); right: -12px;"></div>
-        </div>
-      </div>
-      <!-- 動画Bの上に直接透過オーバーレイする波形レイヤー -->
-      <div class="video-direct-wave-overlay" id="overlay-wave-b">
-        <div class="direct-wave-tag b-tag">
-          <span>📊 今回大会 加速度波形 (±2s)</span>
-          <span id="direct-val-b" class="direct-val">2.27 G</span>
-        </div>
-        <canvas id="canvas-direct-wave-b" style="width:100%; height:80px;"></canvas>
-      </div>
-    </div>
-
-    <!-- Annotation & Grid Canvas -->
-    <canvas id="draw-canvas"></canvas>
-  </div>
-
-  <!-- 3. Playback Controls -->
-  <div id="playback-bar">
-    <div class="seek-row">
-      <span id="cur-pos-text">00:00.00</span>
-      <input type="range" id="seek-bar" class="seek-slider" min="0" max="10000" value="0" oninput="onSeekSlider(this.value)">
-      <span>00:10.00</span>
-    </div>
-    <div class="ctrl-row">
-      <button class="btn active-lock" id="lock-btn" onclick="toggleLock()">🔒 同期ロック中</button>
-      <div style="display:flex; align-items:center; gap:10px;">
-        <button class="btn" onclick="stepFrame(-33)">◀ 1コマ戻し</button>
-        <button class="play-circle" id="play-btn" onclick="togglePlay()">▶</button>
-        <button class="btn" onclick="stepFrame(33)">1コマ送り ▶</button>
-      </div>
-      <select class="btn" id="speed-select" onchange="setSpeed(this.value)">
-        <option value="0.1">0.10x スロー</option>
-        <option value="0.25" selected>0.25x スロー</option>
-        <option value="0.5">0.50x スロー</option>
-        <option value="1.0">1.00x 通常</option>
-      </select>
+    <div class="top-actions">
+      <button class="top-btn" onclick="togglePlaySpeed()">速度: <span id="speed-label">0.25x</span></button>
+      <button class="top-btn" onclick="toggleAllUI(event)">全画面没入</button>
+      <button class="top-btn" onclick="resetSync()">同期リセット</button>
     </div>
   </div>
 
-  <!-- 4. HUD Bar -->
-  <div id="hud-bar">
-    <div style="display:flex; align-items:center;">
-      <div class="hud-lap" id="hud-lap-text">LAP 1: 0:03.20</div>
-      <div class="hud-diff" id="hud-diff-text">Diff: -0.15s (先行)</div>
-    </div>
-    <div class="hud-gauge">
-      <span>合成G: <span id="hud-g-val">1.24 G</span></span>
-      <div class="gauge-bar">
-        <div class="gauge-fill" id="hud-g-fill"></div>
-      </div>
-    </div>
-  </div>
+  <!-- 2. メイン 2画面スプリットビューポート -->
+  <div id="viewport-container" onclick="onViewportClick(event)">
 
-  <!-- 5. Sensor Waveform Area -->
-  <div id="waveform-area">
-    <div class="wave-header">
-      <div style="display:flex; align-items:center; gap:10px;">
-        <span style="font-size:11px; font-weight:bold; color:#00E5FF;">波形系列:</span>
-        <!-- 表示対象セレクター (A / B / Both) -->
-        <div class="mode-selector" style="font-size:10px;">
-          <button class="mini-btn active-src" id="src-btn-both" onclick="setWaveSource('both')">A & B 重畳比較</button>
-          <button class="mini-btn" id="src-btn-a" onclick="setWaveSource('A')">動画A (自選手) のみ</button>
-          <button class="mini-btn" id="src-btn-b" onclick="setWaveSource('B')">動画B (お手本) のみ</button>
+    <!-- ================= 左画面: 過去の大会 (動画A + 波形A) ================= -->
+    <div class="screen-half left-screen" id="screenA">
+      <div class="video-header-badge">
+        <span style="display:inline-block; width:6px; height:6px; border-radius:50%; background:#00E5FF;"></span>
+        過去の大会 (動画 A)
+      </div>
+      <div class="video-time-badge" id="timeA">00:03.20</div>
+
+      <!-- 背景の動画映像キャンバス -->
+      <canvas id="canvas-video-a" class="video-canvas"></canvas>
+
+      <!-- 映像の真上に浮かび上がる波形オーバーレイ (背景透明) -->
+      <div class="wave-overlay-layer" id="overlayA" title="ドラッグして直接シーク可能">
+        <div class="wave-tag-row">
+          <span style="color:#00E5FF;">📊 過去大会 加速度波形 (±2s)</span>
+          <span class="wave-val-pill" id="valA" style="color:#00E5FF;">1.85 G</span>
         </div>
-        <span style="font-size:10px; color:#888; margin-left:4px;">(― 実線: A / --- 破線: B)</span>
+        <canvas id="canvas-wave-a" class="wave-canvas"></canvas>
       </div>
-      <div class="wave-chips" id="wave-chips-container">
-        <!-- JS動的生成 -->
-      </div>
-    </div>
-    <div style="flex:1; position:relative;">
-      <canvas id="wave-canvas"></canvas>
-    </div>
-  </div>
 
-  <!-- 6. Bottom Toolbar -->
-  <div id="bottom-toolbar">
-    <div class="tool-row">
-      <div class="tool-group">
-        <button class="tool-btn" id="grid-btn" onclick="toggleGrid()">▦ 方眼グリッド</button>
-        <button class="tool-btn" id="plumb-btn" onclick="togglePlumb()">┃ 鉛直プラムライン</button>
-      </div>
-      <div class="tool-group">
-        <span style="font-size:10px; color:#888;">同期オフセット:</span>
-        <button class="tool-btn" onclick="adjustOffset(-0.05)">-0.05s</button>
-        <button class="tool-btn" onclick="adjustOffset(-0.01)">-0.01s</button>
-        <span id="offset-badge" style="font-family:monospace; font-size:11px; color:#FFD600; font-weight:bold;">+0.60s</span>
-        <button class="tool-btn" onclick="adjustOffset(0.01)">+0.01s</button>
-        <button class="tool-btn" onclick="adjustOffset(0.05)">+0.05s</button>
+      <!-- 個別調整モード時の単独コマ送りバー -->
+      <div class="individual-ctrl-bar" id="ind-ctrl-a">
+        <span style="font-size:10px; color:#00E5FF; font-weight:bold;">動画A頭出し:</span>
+        <button class="ind-btn" onclick="stepSingle('A', -33)">◀ 1コマ戻し</button>
+        <button class="ind-btn" onclick="stepSingle('A', 33)">1コマ送り ▶</button>
       </div>
     </div>
-    <div class="tool-row">
-      <div class="tool-group">
-        <button class="tool-btn active" id="tool-select" onclick="setTool('none')">選択</button>
-        <button class="tool-btn" id="tool-pen" onclick="setTool('pen')">ペン</button>
-        <button class="tool-btn" id="tool-line" onclick="setTool('line')">直線</button>
-        <button class="tool-btn" id="tool-arrow" onclick="setTool('arrow')">矢印</button>
-        <button class="tool-btn" id="tool-angle" onclick="setTool('angle')">📐 角度計測(3点)</button>
-        <button class="tool-btn" onclick="clearDrawings()" style="color:#FF5252;">消去</button>
+
+    <!-- ================= 右画面: 今回の大会 (動画B + 波形B) ================= -->
+    <div class="screen-half right-screen" id="screenB">
+      <div class="video-header-badge b">
+        <span style="display:inline-block; width:6px; height:6px; border-radius:50%; background:#FF7043;"></span>
+        今回の大会 (動画 B)
       </div>
-      <div class="tool-group">
-        <div class="color-dot active" style="background:#FFD600;" onclick="setColor('#FFD600', this)"></div>
-        <div class="color-dot" style="background:#00E5FF;" onclick="setColor('#00E5FF', this)"></div>
-        <div class="color-dot" style="background:#FF5252;" onclick="setColor('#FF5252', this)"></div>
-        <div class="color-dot" style="background:#00E676;" onclick="setColor('#00E676', this)"></div>
+      <div class="video-time-badge" id="timeB">00:03.12</div>
+
+      <!-- 背景の動画映像キャンバス -->
+      <canvas id="canvas-video-b" class="video-canvas"></canvas>
+
+      <!-- 映像の真上に浮かび上がる波形オーバーレイ (背景透明) -->
+      <div class="wave-overlay-layer" id="overlayB" title="ドラッグして直接シーク可能">
+        <div class="wave-tag-row">
+          <span style="color:#FF7043;">📊 今回大会 加速度波形 (±2s)</span>
+          <span class="wave-val-pill" id="valB" style="color:#FF7043;">2.27 G</span>
+        </div>
+        <canvas id="canvas-wave-b" class="wave-canvas"></canvas>
+      </div>
+
+      <!-- 個別調整モード時の単独コマ送りバー -->
+      <div class="individual-ctrl-bar" id="ind-ctrl-b">
+        <span style="font-size:10px; color:#FF7043; font-weight:bold;">動画B頭出し:</span>
+        <button class="ind-btn" onclick="stepSingle('B', -33)">◀ 1コマ戻し</button>
+        <button class="ind-btn" onclick="stepSingle('B', 33)">1コマ送り ▶</button>
       </div>
     </div>
+
+    <!-- 3. 中央下部に浮かぶ「極小スリガラス調ピルHUD」 -->
+    <div id="floating-pill-hud">
+      <button class="pill-btn lock-active" id="sync-lock-btn" onclick="toggleSyncLock(event)" title="同期モード / 個別頭出しモードの切り替え">
+        <span id="lock-icon">🔒</span> <span id="lock-text">同期ロック中</span>
+      </button>
+
+      <button class="pill-btn" onclick="stepDual(-33, event)" title="左右一緒に1コマ戻し">
+        ◀ 1コマ
+      </button>
+
+      <button class="pill-btn primary" id="play-btn" onclick="togglePlay(event)">
+        <span id="play-icon">❚❚</span> 一時停止
+      </button>
+
+      <button class="pill-btn" onclick="stepDual(33, event)" title="左右一緒に1コマ送り">
+        1コマ ▶
+      </button>
+
+      <!-- 微調整ボタン -->
+      <div style="display:flex; gap:2px; margin-left:4px; border-left:1px solid rgba(255,255,255,0.15); padding-left:8px;">
+        <button class="pill-btn" style="padding:4px 8px; font-size:10px;" onclick="adjustOffset(-10, event)" title="Bを0.01秒早める">-0.01s</button>
+        <button class="pill-btn" style="padding:4px 8px; font-size:10px;" onclick="adjustOffset(10, event)" title="Bを0.01秒遅らせる">+0.01s</button>
+      </div>
+    </div>
+
+    <!-- 没入モード操作ヒント -->
+    <div id="fullscreen-hint">画面タップ: UI表示/非表示切替 ｜ 左右ドラッグ: コマ送り</div>
   </div>
 
   <script>
     // --- 状態管理 ---
-    let viewMode = 'split';
-    let isPlaying = false;
-    let playbackSpeed = 0.25;
-    let isSyncLocked = true;
-    let currentMs = 0;
-    let baseOffsetMs = 600; // 0.6s
-    let manualOffsetSec = 0.0;
-    const totalMs = 10000;
+    let isPlaying = true;
+    let isSyncLocked = true;     // true: 左右同期, false: 個別頭出し
+    let playbackSpeed = 0.25;    // 0.1x, 0.25x, 0.5x, 1.0x
+    let isUiVisible = true;
 
-    let showGrid = false;
-    let showPlumb = false;
-    let activeTool = 'none';
-    let strokeColor = '#FFD600';
-    let drawingObjects = [];
-    let currentPoints = [];
+    let timeA = 3200;            // 動画Aの現在再生時刻 (ms)
+    let baseOffsetMs = -80;      // 動画Bの初期同期ズレ (ms)
+    let manualOffsetMs = 0;      // ユーザーによる微調整オフセット (ms)
+    let totalMs = 12000;
 
-    // 波形系列定義 (全12系統)
-    const WAVE_SERIES = [
-      { id: 'accX', label: 'Acc X', color: '#FF5252', unit: 'g', selected: true },
-      { id: 'accY', label: 'Acc Y', color: '#69F0AE', unit: 'g', selected: true },
-      { id: 'accZ', label: 'Acc Z', color: '#40C4FF', unit: 'g', selected: true },
-      { id: 'accTotal', label: 'Acc 合成G', color: '#FFD740', unit: 'g', selected: true },
-      { id: 'gyrX', label: 'Gyro X', color: '#FF9100', unit: '°/s', selected: false },
-      { id: 'gyrY', label: 'Gyro Y', color: '#00E676', unit: '°/s', selected: false },
-      { id: 'gyrZ', label: 'Gyro Z', color: '#448AFF', unit: '°/s', selected: false },
-      { id: 'gyrTotal', label: 'Gyro 合成', color: '#FF4081', unit: '°/s', selected: false },
-      { id: 'angX', label: 'Angle X', color: '#E040FB', unit: '°', selected: false },
-      { id: 'angY', label: 'Angle Y', color: '#18FFFF', unit: '°', selected: false },
-      { id: 'angZ', label: 'Angle Z', color: '#EEFF41', unit: '°', selected: false },
-      { id: 'angTotal', label: 'Angle 合成', color: '#FFFFFF', unit: '°', selected: false },
-    ];
+    // キャンバス取得
+    const cvA = document.getElementById('canvas-video-a');
+    const ctxVA = cvA.getContext('2d');
+    const cvB = document.getElementById('canvas-video-b');
+    const ctxVB = cvB.getContext('2d');
 
-    // 表示対象セレクター (both: 重畳, A: 自身のみ, B: 比較対象のみ)
-    let waveSource = 'both';
+    const cwA = document.getElementById('canvas-wave-a');
+    const ctxWA = cwA.getContext('2d');
+    const cwB = document.getElementById('canvas-wave-b');
+    const ctxWB = cwB.getContext('2d');
 
-    function setWaveSource(src) {
-      waveSource = src;
-      // 下部パネルのボタン更新
-      document.querySelectorAll('#waveform-area .mini-btn').forEach(b => b.classList.remove('active-src'));
-      const btn = document.getElementById(`src-btn-${src.toLowerCase()}`);
-      if (btn) btn.classList.add('active-src');
+    function resize() {
+      cvA.width = cvA.parentElement.clientWidth;
+      cvA.height = cvA.parentElement.clientHeight;
+      cvB.width = cvB.parentElement.clientWidth;
+      cvB.height = cvB.parentElement.clientHeight;
 
-      // スコープパネルのボタン更新
-      document.querySelectorAll('#scope-overlay-hud .mini-btn').forEach(b => b.classList.remove('active-src'));
-      const sbtn = document.getElementById(`src-scope-${src.toLowerCase()}`);
-      if (sbtn) sbtn.classList.add('active-src');
-
-      updateUI();
+      cwA.width = cwA.parentElement.clientWidth;
+      cwA.height = cwA.parentElement.clientHeight;
+      cwB.width = cwB.parentElement.clientWidth;
+      cwB.height = cwB.parentElement.clientHeight;
     }
-
-    // サンプルセンサーデータ生成 (100Hz相当: 100件)
-    // 1. 動画A用 (自選手)
-    const sensorDataA = [];
-    for (let i = 0; i < 100; i++) {
-      const t = i * 0.1;
-      const ax = Math.sin(t * 2) * 1.5;
-      const ay = Math.cos(t * 2) * 0.8;
-      const az = 1.0 + Math.sin(t * 4) * 0.5;
-      const totalG = Math.sqrt(ax * ax + ay * ay + az * az);
-
-      const gx = Math.cos(t * 2) * 280;
-      const gy = Math.sin(t * 3) * 190;
-      const gz = Math.cos(t * 1.5) * 140;
-      const totalGyr = Math.sqrt(gx * gx + gy * gy + gz * gz);
-
-      const roll = Math.sin(t) * 32;
-      const pitch = Math.cos(t * 1.2) * 22;
-      const yaw = ((i * 3.6) % 360) - 180;
-      const totalAng = Math.sqrt(roll * roll + pitch * pitch + yaw * yaw);
-
-      sensorDataA.push({ ms: i * 100, ax, ay, az, totalG, gx, gy, gz, totalGyr, roll, pitch, yaw, totalAng });
-    }
-
-    // 2. 動画B用 (比較対象 / お手本: より鋭いピーク・高回転)
-    const sensorDataB = [];
-    for (let i = 0; i < 100; i++) {
-      const t = i * 0.1;
-      // お手本は踏み込みが鋭く、ピークが大きい
-      const ax = Math.sin(t * 2.1) * 1.9;
-      const ay = Math.cos(t * 2.1) * 1.1;
-      const az = 1.0 + Math.sin(t * 4.2) * 0.8;
-      const totalG = Math.sqrt(ax * ax + ay * ay + az * az);
-
-      const gx = Math.cos(t * 2.1) * 360;
-      const gy = Math.sin(t * 3.1) * 240;
-      const gz = Math.cos(t * 1.6) * 180;
-      const totalGyr = Math.sqrt(gx * gx + gy * gy + gz * gz);
-
-      const roll = Math.sin(t * 1.05) * 40;
-      const pitch = Math.cos(t * 1.25) * 28;
-      const yaw = ((i * 3.8) % 360) - 180;
-      const totalAng = Math.sqrt(roll * roll + pitch * pitch + yaw * yaw);
-
-      sensorDataB.push({ ms: i * 100, ax, ay, az, totalG, gx, gy, gz, totalGyr, roll, pitch, yaw, totalAng });
-    }
-
-    // 初期化
+    window.addEventListener('resize', resize);
     window.addEventListener('load', () => {
-      initWaveChips();
-      resizeCanvases();
-      updateUI();
-      window.addEventListener('resize', resizeCanvases);
-      initCanvasEvents();
+      resize();
+      initDragSeek();
+      renderFrame();
     });
 
-    function resizeCanvases() {
-      const container = document.getElementById('viewport-container');
-      const dCanvas = document.getElementById('draw-canvas');
-      dCanvas.width = container.clientWidth;
-      dCanvas.height = container.clientHeight;
-      drawAnnotations();
-
-      const wCanvas = document.getElementById('wave-canvas');
-      if (wCanvas && wCanvas.parentElement) {
-        wCanvas.width = wCanvas.parentElement.clientWidth;
-        wCanvas.height = wCanvas.parentElement.clientHeight;
-        drawWaveform();
-      }
-
-      const sCanvas = document.getElementById('scope-canvas');
-      if (sCanvas && sCanvas.parentElement) {
-        sCanvas.width = sCanvas.parentElement.clientWidth;
-        sCanvas.height = sCanvas.parentElement.clientHeight - 62;
-        if (isScopeOverlay) drawScopeWaveform();
-      }
-
-      // ダイレクトオーバーレイキャンバスのリサイズ
-      const cda = document.getElementById('canvas-direct-wave-a');
-      if (cda) {
-        cda.width = cda.clientWidth;
-        cda.height = cda.clientHeight;
-      }
-      const cdb = document.getElementById('canvas-direct-wave-b');
-      if (cdb) {
-        cdb.width = cdb.clientWidth;
-        cdb.height = cdb.clientHeight;
-      }
-      drawDirectWaveOverlays();
+    // --- UIトグル (ワンタップ全画面没入) ---
+    function toggleAllUI(e) {
+      if (e) e.stopPropagation();
+      isUiVisible = !isUiVisible;
+      document.getElementById('top-bar').classList.toggle('hidden-ui', !isUiVisible);
+      document.getElementById('floating-pill-hud').classList.toggle('hidden-ui', !isUiVisible);
+      document.getElementById('viewport-container').classList.toggle('hidden-ui', !isUiVisible);
     }
 
-    // --- 波形チップ生成 ---
-    function initWaveChips() {
-      const container = document.getElementById('wave-chips-container');
-      container.innerHTML = '';
-      WAVE_SERIES.forEach(s => {
-        const chip = document.createElement('div');
-        chip.className = `chip ${s.selected ? 'selected' : ''}`;
-        chip.style.color = s.color;
-        chip.innerHTML = `<span class="dot"></span>${s.label}`;
-        chip.onclick = () => {
-          s.selected = !s.selected;
-          chip.classList.toggle('selected', s.selected);
-          drawWaveform();
-        };
-        container.appendChild(chip);
-      });
-    }
-
-    // --- 表示モード切替 ---
-    function setViewMode(mode) {
-      viewMode = mode;
-      document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
-      event.target.classList.add('active');
-
-      const boxA = document.getElementById('boxA');
-      const boxB = document.getElementById('boxB');
-      const slider = document.getElementById('ghost-slider-panel');
-
-      if (mode === 'single') {
-        boxA.style.display = 'flex';
-        boxB.style.display = 'none';
-        slider.style.display = 'none';
-        boxB.style.opacity = '1';
-      } else if (mode === 'split') {
-        boxA.style.display = 'flex';
-        boxB.style.display = 'flex';
-        slider.style.display = 'none';
-        boxA.style.position = 'relative';
-        boxB.style.position = 'relative';
-        boxB.style.opacity = '1';
-      } else if (mode === 'ghost') {
-        boxA.style.display = 'flex';
-        boxB.style.display = 'flex';
-        slider.style.display = 'flex';
-        boxA.style.position = 'absolute';
-        boxA.style.width = '100%';
-        boxA.style.height = '100%';
-        boxB.style.position = 'absolute';
-        boxB.style.width = '100%';
-        boxB.style.height = '100%';
-        updateGhost(document.getElementById('ghost-range').value);
+    function onViewportClick(e) {
+      // ボタンや波形エリアをクリックした時は没入トグルを発動させない
+      if (e.target.closest('#floating-pill-hud') || e.target.closest('.individual-ctrl-bar') || e.target.closest('.wave-overlay-layer') || e.target.closest('#top-bar')) {
+        return;
       }
-      resizeCanvases();
+      toggleAllUI();
     }
 
-    function updateGhost(val) {
-      document.getElementById('ghost-val').innerText = `${val}%`;
-      if (viewMode === 'ghost') {
-        document.getElementById('boxB').style.opacity = val / 100;
-      }
-    }
-
-    // --- 再生エンジン・ループ ---
-    let lastTime = 0;
-    function animLoop(time) {
-      if (isPlaying) {
-        if (!lastTime) lastTime = time;
-        const delta = (time - lastTime) * playbackSpeed;
-        lastTime = time;
-        currentMs += delta;
-        if (currentMs > totalMs) currentMs = 0;
-        updateUI();
-        requestAnimationFrame(animLoop);
-      }
-    }
-
-    function togglePlay() {
+    // --- 再生 / 一時停止 ---
+    function togglePlay(e) {
+      if (e) e.stopPropagation();
       isPlaying = !isPlaying;
-      document.getElementById('play-btn').innerText = isPlaying ? '❚❚' : '▶';
-      if (isPlaying) {
-        lastTime = 0;
-        requestAnimationFrame(animLoop);
-      }
+      document.getElementById('play-icon').innerText = isPlaying ? '❚❚' : '▶';
+      document.getElementById('play-btn').innerHTML = isPlaying ? '<span id="play-icon">❚❚</span> 一時停止' : '<span id="play-icon">▶</span> 再生';
     }
 
-    function stepFrame(ms) {
+    // --- 左右同期コマ送り ---
+    function stepDual(ms, e) {
+      if (e) e.stopPropagation();
       if (isPlaying) togglePlay();
-      currentMs = Math.max(0, Math.min(totalMs, currentMs + ms));
-      updateUI();
+      timeA = Math.max(0, Math.min(totalMs, timeA + ms));
+      renderFrame();
     }
 
-    function setSpeed(v) {
-      playbackSpeed = parseFloat(v);
+    // --- 個別単独コマ送り (頭出し用) ---
+    function stepSingle(target, ms) {
+      if (isPlaying) togglePlay();
+      if (target === 'A') {
+        timeA = Math.max(0, Math.min(totalMs, timeA + ms));
+      } else {
+        manualOffsetMs += ms;
+      }
+      renderFrame();
     }
 
-    function toggleLock() {
+    // --- 同期ロック ⇄ 個別調整トグル ---
+    function toggleSyncLock(e) {
+      if (e) e.stopPropagation();
       isSyncLocked = !isSyncLocked;
-      const btn = document.getElementById('lock-btn');
-      btn.innerText = isSyncLocked ? '🔒 同期ロック中' : '🔓 個別調整中';
-      btn.classList.toggle('active-lock', isSyncLocked);
-    }
+      const btn = document.getElementById('sync-lock-btn');
+      const icon = document.getElementById('lock-icon');
+      const text = document.getElementById('lock-text');
 
-    function adjustOffset(sec) {
-      manualOffsetSec += sec;
-      const sign = manualOffsetSec >= 0 ? '+' : '';
-      document.getElementById('offset-badge').innerText = `${sign}${manualOffsetSec.toFixed(2)}s`;
-      updateUI();
-    }
+      const indA = document.getElementById('ind-ctrl-a');
+      const indB = document.getElementById('ind-ctrl-b');
 
-    function onSeekSlider(val) {
-      currentMs = parseInt(val);
-      updateUI();
-    }
-
-    function updateUI() {
-      // タイムコード更新
-      const fmt = ms => {
-        const d = new Date(ms);
-        const m = String(d.getMinutes()).padStart(2, '0');
-        const s = String(d.getSeconds()).padStart(2, '0');
-        const f = String(Math.floor(d.getMilliseconds() / 10)).padStart(2, '0');
-        return `${m}:${s}.${f}`;
-      };
-
-      document.getElementById('timeA').innerText = fmt(currentMs);
-      const posB = isSyncLocked ? Math.max(0, currentMs + baseOffsetMs + (manualOffsetSec * 1000)) : currentMs;
-      document.getElementById('timeB').innerText = fmt(posB);
-      document.getElementById('cur-pos-text').innerText = fmt(currentMs);
-      document.getElementById('seek-bar').value = currentMs;
-
-      // 擬似アスリートのアニメーション (動画代用)
-      const ang = Math.sin(currentMs / 300) * 35;
-      document.querySelector('#athleteA .dummy-limb:first-child').style.transform = `rotate(${ang}deg)`;
-      document.querySelector('#athleteA .dummy-limb:last-child').style.transform = `rotate(${-ang}deg)`;
-      document.querySelector('#athleteB .dummy-limb:first-child').style.transform = `rotate(${ang + 15}deg)`;
-      document.querySelector('#athleteB .dummy-limb:last-child').style.transform = `rotate(${-ang - 15}deg)`;
-
-      // 二分探索で動画A・動画Bの最新センサーデータ取得
-      const nearestA = findNearestSensor(sensorDataA, currentMs);
-      const nearestB = findNearestSensor(sensorDataB, posB);
-
-      if (nearestA && nearestB) {
-        const diffG = nearestA.totalG - nearestB.totalG;
-        const sign = diffG >= 0 ? '+' : '';
-        document.getElementById('hud-g-val').innerText = `A:${nearestA.totalG.toFixed(2)}G / B:${nearestB.totalG.toFixed(2)}G (Δ${sign}${diffG.toFixed(2)}G)`;
-        const pctA = Math.min(100, (nearestA.totalG / 3.0) * 100);
-        document.getElementById('hud-g-fill').style.width = `${pctA}%`;
-      }
-
-      // HUD ラップ情報
-      if (currentMs < 3200) {
-        document.getElementById('hud-lap-text').innerText = 'LAP 1: 0:03.20';
-        document.getElementById('hud-diff-text').innerText = 'Diff: -0.15s (先行)';
-      } else if (currentMs < 6300) {
-        document.getElementById('hud-lap-text').innerText = 'LAP 2: 0:03.10 (最速)';
-        document.getElementById('hud-diff-text').innerText = 'Diff: -0.22s (先行)';
+      if (isSyncLocked) {
+        btn.className = 'pill-btn lock-active';
+        icon.innerText = '🔒';
+        text.innerText = '同期ロック中';
+        indA.classList.remove('active');
+        indB.classList.remove('active');
       } else {
-        document.getElementById('hud-lap-text').innerText = 'LAP 3: 0:03.40';
-        document.getElementById('hud-diff-text').innerText = 'Diff: -0.18s (先行)';
+        btn.className = 'pill-btn unlock-active';
+        icon.innerText = '🔓';
+        text.innerText = '個別頭出し中';
+        indA.classList.add('active');
+        indB.classList.add('active');
       }
-
-      drawWaveform();
-      if (isScopeOverlay) drawScopeWaveform();
-      drawDirectWaveOverlays();
     }
 
-    // --- 動画映像の上に直接波形をオーバーレイ描画 ---
-    function drawDirectWaveOverlays() {
-      const cda = document.getElementById('canvas-direct-wave-a');
-      const cdb = document.getElementById('canvas-direct-wave-b');
-      if (!cda || !cdb) return;
+    function adjustOffset(ms, e) {
+      if (e) e.stopPropagation();
+      manualOffsetMs += ms;
+      renderFrame();
+    }
 
-      const posB = isSyncLocked ? Math.max(0, currentMs + baseOffsetMs + (manualOffsetSec * 1000)) : currentMs;
-      const windowMs = 2000; // 前後±2.0秒
+    function resetSync() {
+      manualOffsetMs = 0;
+      timeA = 3200;
+      renderFrame();
+    }
 
-      function renderSingleOverlay(canvas, dataList, targetMs, color, valElementId) {
-        const ctx = canvas.getContext('2d');
-        const w = canvas.width;
-        const h = canvas.height;
-        ctx.clearRect(0, 0, w, h);
+    function togglePlaySpeed() {
+      const speeds = [0.1, 0.25, 0.5, 1.0];
+      const idx = speeds.indexOf(playbackSpeed);
+      playbackSpeed = speeds[(idx + 1) % speeds.length];
+      document.getElementById('speed-label').innerText = `${playbackSpeed}x`;
+    }
 
-        const startMs = targetMs - windowMs;
-        const endMs = targetMs + windowMs;
+    // --- 波形ダイレクトドラッグシーク ---
+    function initDragSeek() {
+      let isDragging = false;
+      let startX = 0;
 
-        // 基準線 (点線)
-        const midY = h * 0.65;
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
-        ctx.lineWidth = 1;
-        ctx.setLineDash([2, 4]);
+      const vp = document.getElementById('viewport-container');
+      vp.addEventListener('mousedown', e => {
+        if (e.target.closest('#floating-pill-hud') || e.target.closest('.individual-ctrl-bar') || e.target.closest('#top-bar')) return;
+        isDragging = true;
+        startX = e.clientX;
+      });
+
+      window.addEventListener('mousemove', e => {
+        if (!isDragging) return;
+        const dx = e.clientX - startX;
+        if (Math.abs(dx) > 4) {
+          if (isPlaying) togglePlay();
+          timeA = Math.max(0, Math.min(totalMs, timeA + (dx > 0 ? 33 : -33)));
+          startX = e.clientX;
+          renderFrame();
+        }
+      });
+
+      window.addEventListener('mouseup', () => { isDragging = false; });
+    }
+
+    // --- センサー波形計算 (加速度G) ---
+    function getGA(tMs) {
+      const t = tMs / 1000;
+      const p = t * 3.4;
+      const base = Math.sin(p);
+      return 1.1 + (base > 0 ? Math.pow(base, 2) * 0.75 : base * 0.3 * 0.75);
+    }
+    function getGB(tMs) {
+      const t = tMs / 1000;
+      const p = t * 3.5;
+      const base = Math.sin(p);
+      return 1.1 + (base > 0 ? Math.pow(base, 2.3) * 1.17 : base * 0.25 * 1.17);
+    }
+
+    // --- 動画映像描画 (ランナー動作シミュレーション) ---
+    function drawRunner(ctx, w, h, tMs, color, isSharp) {
+      ctx.clearRect(0, 0, w, h);
+      const t = tMs / 1000;
+      const groundY = h * 0.78;
+
+      // 走路グリッド
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(0, groundY); ctx.lineTo(w, groundY);
+      ctx.stroke();
+
+      for (let x = (t * 80) % 50; x < w; x += 50) {
         ctx.beginPath();
-        ctx.moveTo(0, midY); ctx.lineTo(w, midY);
+        ctx.moveTo(x, groundY); ctx.lineTo(x - 25, h);
         ctx.stroke();
-        ctx.setLineDash([]);
+      }
 
-        // 波形データ抽出
-        const filtered = dataList.filter(d => d.ms >= startMs && d.ms <= endMs);
-        if (filtered.length === 0) return;
+      // ランナー骨格
+      const p = t * (isSharp ? 3.5 : 3.4);
+      const bounce = Math.abs(Math.sin(p)) * (isSharp ? 18 : 13);
+      const cx = w * 0.5;
+      const cy = groundY - 50 - bounce;
 
-        // 波形ライン (発光調)
+      ctx.strokeStyle = color;
+      ctx.fillStyle = color;
+      ctx.lineWidth = 3.8;
+      ctx.lineCap = 'round';
+
+      // 頭部
+      ctx.beginPath();
+      ctx.arc(cx, cy - 25, 9, 0, Math.PI * 2);
+      ctx.fill();
+
+      // 胴体 (前傾)
+      const forwardLean = isSharp ? 7 : 3;
+      ctx.beginPath();
+      ctx.moveTo(cx, cy - 16);
+      ctx.lineTo(cx - forwardLean, cy + 18);
+      ctx.stroke();
+
+      // 腕 (スイング)
+      const arm = Math.sin(p) * (isSharp ? 0.9 : 0.75);
+      ctx.beginPath();
+      ctx.moveTo(cx, cy - 8);
+      ctx.lineTo(cx + Math.cos(arm) * 22, cy - 8 + Math.sin(arm) * 22);
+      ctx.moveTo(cx, cy - 8);
+      ctx.lineTo(cx - Math.cos(arm) * 22, cy - 8 - Math.sin(arm) * 22);
+      ctx.stroke();
+
+      // 脚 (キック・踏み込み)
+      const leg1 = Math.cos(p) * (isSharp ? 1.0 : 0.85);
+      const leg2 = -Math.cos(p) * (isSharp ? 1.0 : 0.85);
+
+      // 脚1
+      ctx.beginPath();
+      ctx.moveTo(cx - forwardLean, cy + 18);
+      const k1x = cx - forwardLean + Math.sin(leg1) * 20;
+      const k1y = cy + 18 + Math.cos(leg1) * 20;
+      ctx.lineTo(k1x, k1y);
+      ctx.lineTo(k1x + Math.sin(leg1 - 0.35) * 20, k1y + Math.cos(leg1 - 0.35) * 20);
+      ctx.stroke();
+
+      // 脚2
+      ctx.beginPath();
+      ctx.moveTo(cx - forwardLean, cy + 18);
+      const k2x = cx - forwardLean + Math.sin(leg2) * 20;
+      const k2y = cy + 18 + Math.cos(leg2) * 20;
+      ctx.lineTo(k2x, k2y);
+      ctx.lineTo(k2x + Math.sin(leg2 - 0.35) * 20, k2y + Math.cos(leg2 - 0.35) * 20);
+      ctx.stroke();
+
+      // 接地インパクト円 (踏み込み瞬間エフェクト)
+      if (bounce < 2.5) {
         ctx.strokeStyle = color;
-        ctx.lineWidth = 2.6;
-        ctx.shadowColor = color;
-        ctx.shadowBlur = 6;
+        ctx.lineWidth = 2.0;
         ctx.beginPath();
-
-        const scaleY = h / 5.5;
-        filtered.forEach((rec, idx) => {
-          const x = ((rec.ms - startMs) / (windowMs * 2)) * w;
-          const val = rec.totalG;
-          const y = Math.max(2, Math.min(h - 2, midY - ((val - 1.0) * scaleY)));
-          if (idx === 0) ctx.moveTo(x, y);
-          else ctx.lineTo(x, y);
-        });
+        ctx.ellipse(k1x, groundY, isSharp ? 20 : 13, 4, 0, 0, Math.PI * 2);
         ctx.stroke();
-        ctx.shadowBlur = 0;
-
-        // 中央 NOW マーカー
-        const centerX = w / 2;
-        ctx.strokeStyle = '#FF5252';
-        ctx.lineWidth = 2;
-        ctx.setLineDash([3, 2]);
-        ctx.beginPath();
-        ctx.moveTo(centerX, 0); ctx.lineTo(centerX, h);
-        ctx.stroke();
-        ctx.setLineDash([]);
-
-        // 現在値ドット
-        const nearest = findNearestSensor(dataList, targetMs);
-        if (nearest) {
-          const curY = Math.max(2, Math.min(h - 2, midY - ((nearest.totalG - 1.0) * scaleY)));
-          ctx.fillStyle = '#FF5252';
-          ctx.beginPath();
-          ctx.arc(centerX, curY, 4.5, 0, Math.PI * 2);
-          ctx.fill();
-
-          const valEl = document.getElementById(valElementId);
-          if (valEl) valEl.innerText = `${nearest.totalG.toFixed(2)} G`;
-        }
       }
-
-      // 左動画Aの上に波形Aをオーバーレイ (シアン色)
-      renderSingleOverlay(cda, sensorDataA, currentMs, '#00E5FF', 'direct-val-a');
-
-      // 右動画Bの上に波形Bをオーバーレイ (オレンジ色)
-      renderSingleOverlay(cdb, sensorDataB, posB, '#FF7043', 'direct-val-b');
     }
 
-    // --- スコープHUDオーバーレイ制御 ---
-    let isScopeOverlay = false;
-    let scopePosition = 'right'; // 'right' or 'left'
-    let scopeWindowSec = 2.0;    // 前後±2.0秒 (計4秒)
-    let scopeOpacityMode = 0;    // 0: 0.85, 1: 0.60, 2: 0.35
-
-    function toggleScopeOverlay() {
-      isScopeOverlay = !isScopeOverlay;
-      const btn = document.getElementById('hud-overlay-btn');
-      const hud = document.getElementById('scope-overlay-hud');
-      const waveArea = document.getElementById('waveform-area');
-
-      if (isScopeOverlay) {
-        btn.innerText = '📱 HUDオーバーレイ: ON';
-        btn.style.background = '#00E5FF';
-        btn.style.color = '#000';
-        hud.style.display = 'flex';
-        waveArea.classList.add('collapsed');
-      } else {
-        btn.innerText = '📱 HUDオーバーレイ: OFF';
-        btn.style.background = '#262C38';
-        btn.style.color = '#00E5FF';
-        hud.style.display = 'none';
-        waveArea.classList.remove('collapsed');
-      }
-      resizeCanvases();
-      updateUI();
-    }
-
-    function toggleScopePosition() {
-      scopePosition = scopePosition === 'right' ? 'left' : 'right';
-      const hud = document.getElementById('scope-overlay-hud');
-      hud.classList.toggle('pos-left', scopePosition === 'left');
-    }
-
-    function cycleScopeWindow() {
-      if (scopeWindowSec === 2.0) scopeWindowSec = 1.0;
-      else if (scopeWindowSec === 1.0) scopeWindowSec = 3.0;
-      else scopeWindowSec = 2.0;
-
-      document.getElementById('scope-range-badge').innerText = `(±${scopeWindowSec.toFixed(1)}秒)`;
-      document.getElementById('btn-sec-val').innerText = `±${scopeWindowSec.toFixed(0)}s`;
-      drawScopeWaveform();
-    }
-
-    function toggleScopeOpacity() {
-      scopeOpacityMode = (scopeOpacityMode + 1) % 3;
-      const opacities = [0.85, 0.60, 0.35];
-      const hud = document.getElementById('scope-overlay-hud');
-      hud.style.background = `rgba(15, 18, 24, ${opacities[scopeOpacityMode]})`;
-    }
-
-    function drawScopeWaveform() {
-      const canvas = document.getElementById('scope-canvas');
-      if (!canvas || !isScopeOverlay) return;
-      const ctx = canvas.getContext('2d');
-      const w = canvas.width;
-      const h = canvas.height;
+    // --- 映像上ダイレクト波形描画 (透明オーバーレイ) ---
+    function drawDirectWaveOverlay(ctx, w, h, centerMs, color, gFunc) {
       ctx.clearRect(0, 0, w, h);
 
-      const windowMs = scopeWindowSec * 1000;
-      const startMs = currentMs - windowMs;
-      const endMs = currentMs + windowMs;
-
-      // 時間目盛ライン（0.5秒刻み）
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.08)';
+      // ゼロ基準線
+      const midY = h * 0.65;
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
       ctx.lineWidth = 1;
-      const stepMs = 500;
-      const firstGrid = Math.ceil(startMs / stepMs) * stepMs;
-      for (let t = firstGrid; t <= endMs; t += stepMs) {
-        const x = ((t - startMs) / (windowMs * 2)) * w;
-        ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, h); ctx.stroke();
-
-        const diffSec = (t - currentMs) / 1000;
-        if (Math.abs(diffSec) > 0.1) {
-          ctx.fillStyle = 'rgba(255, 255, 255, 0.35)';
-          ctx.font = '9px monospace';
-          const label = (diffSec > 0 ? '+' : '') + diffSec.toFixed(1) + 's';
-          ctx.fillText(label, x - 10, h - 4);
-        }
-      }
-
-      // 中央ゼロ水平線
-      const midY = h / 2;
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)';
-      ctx.beginPath(); ctx.moveTo(0, midY); ctx.lineTo(w, midY); ctx.stroke();
-
-      const posB = isSyncLocked ? Math.max(0, currentMs + baseOffsetMs + (manualOffsetSec * 1000)) : currentMs;
-      const startMsB = posB - windowMs;
-      const endMsB = posB + windowMs;
-
-      // 1. 動画A (自選手: 実線) の描画
-      if (waveSource === 'both' || waveSource === 'A') {
-        const scopeDataA = sensorDataA.filter(d => d.ms >= startMs && d.ms <= endMs);
-        const activeSeries = WAVE_SERIES.filter(s => s.selected);
-        activeSeries.forEach(series => {
-          ctx.strokeStyle = series.color;
-          ctx.lineWidth = 2.2;
-          ctx.setLineDash([]);
-          ctx.beginPath();
-
-          let scaleY = 30;
-          if (series.id.startsWith('acc')) scaleY = h / 7;
-          else if (series.id.startsWith('gyr')) scaleY = h / 900;
-          else if (series.id.startsWith('ang')) scaleY = h / 380;
-
-          scopeDataA.forEach((rec, idx) => {
-            const x = ((rec.ms - startMs) / (windowMs * 2)) * w;
-            let val = getRecordValue(rec, series.id);
-            const y = Math.max(4, Math.min(h - 4, midY - (val * scaleY)));
-            if (idx === 0) ctx.moveTo(x, y);
-            else ctx.lineTo(x, y);
-          });
-          ctx.stroke();
-        });
-      }
-
-      // 2. 動画B (比較対象/お手本: 破線) の描画
-      if (waveSource === 'both' || waveSource === 'B') {
-        const scopeDataB = sensorDataB.filter(d => d.ms >= startMsB && d.ms <= endMsB);
-        const activeSeries = WAVE_SERIES.filter(s => s.selected);
-        activeSeries.forEach(series => {
-          ctx.strokeStyle = series.color;
-          ctx.lineWidth = 1.8;
-          ctx.setLineDash([5, 3]); // 破線
-          ctx.beginPath();
-
-          let scaleY = 30;
-          if (series.id.startsWith('acc')) scaleY = h / 7;
-          else if (series.id.startsWith('gyr')) scaleY = h / 900;
-          else if (series.id.startsWith('ang')) scaleY = h / 380;
-
-          scopeDataB.forEach((rec, idx) => {
-            const x = ((rec.ms - startMsB) / (windowMs * 2)) * w;
-            let val = getRecordValue(rec, series.id);
-            const y = Math.max(4, Math.min(h - 4, midY - (val * scaleY)));
-            if (idx === 0) ctx.moveTo(x, y);
-            else ctx.lineTo(x, y);
-          });
-          ctx.stroke();
-        });
-        ctx.setLineDash([]);
-      }
-
-      // 中央 NOW マーカー (赤い現在時刻縦線)
-      const centerX = w / 2;
-      ctx.strokeStyle = '#FF5252';
-      ctx.lineWidth = 2;
-      ctx.setLineDash([4, 2]);
-      ctx.beginPath(); ctx.moveTo(centerX, 0); ctx.lineTo(centerX, h); ctx.stroke();
-      ctx.setLineDash([]);
-
-      // 現在マーカーバッジ
-      ctx.fillStyle = '#FF5252';
-      ctx.fillRect(centerX - 16, 2, 32, 14);
-      ctx.fillStyle = '#fff';
-      ctx.font = 'bold 9px sans-serif';
-      ctx.fillText('NOW', centerX - 10, 12);
-
-      // スコープフッター数値更新 (A vs B リアルタイム差分)
-      const curA = findNearestSensor(sensorDataA, currentMs);
-      const curB = findNearestSensor(sensorDataB, posB);
-      if (curA && curB) {
-        document.getElementById('scope-val-a').innerText = `${curA.totalG.toFixed(2)} G`;
-        document.getElementById('scope-val-b').innerText = `${curB.totalG.toFixed(2)} G`;
-        const diff = curA.totalG - curB.totalG;
-        const sign = diff >= 0 ? '+' : '';
-        document.getElementById('scope-diff-val').innerText = `${sign}${diff.toFixed(2)} G (${diff >= 0 ? '自選手大' : 'お手本大'})`;
-      }
-    }
-
-    function getRecordValue(rec, seriesId) {
-      if (seriesId === 'accX') return rec.ax;
-      if (seriesId === 'accY') return rec.ay;
-      if (seriesId === 'accZ') return rec.az;
-      if (seriesId === 'accTotal') return rec.totalG;
-      if (seriesId === 'gyrX') return rec.gx;
-      if (seriesId === 'gyrY') return rec.gy;
-      if (seriesId === 'gyrZ') return rec.gz;
-      if (seriesId === 'gyrTotal') return rec.totalGyr;
-      if (seriesId === 'angX') return rec.roll;
-      if (seriesId === 'angY') return rec.pitch;
-      if (seriesId === 'angZ') return rec.yaw;
-      if (seriesId === 'angTotal') return rec.totalAng;
-      return 0;
-    }
-
-    function findNearestSensor(dataList, targetMs) {
-      if (!dataList || dataList.length === 0) return null;
-      let low = 0, high = dataList.length - 1;
-      while (low <= high) {
-        const mid = (low + high) >> 1;
-        if (dataList[mid].ms === targetMs) return dataList[mid];
-        if (dataList[mid].ms < targetMs) low = mid + 1;
-        else high = mid - 1;
-      }
-      if (low >= dataList.length) return dataList[high];
-      if (high < 0) return dataList[low];
-      return Math.abs(dataList[low].ms - targetMs) < Math.abs(dataList[high].ms - targetMs) ? dataList[low] : dataList[high];
-    }
-
-    // --- 波形キャンバス描画 (下部メインパネル) ---
-    function drawWaveform() {
-      const canvas = document.getElementById('wave-canvas');
-      const ctx = canvas.getContext('2d');
-      const w = canvas.width;
-      const h = canvas.height;
-      ctx.clearRect(0, 0, w, h);
-
-      const midY = h / 2;
-      // 0基準ライン
-      ctx.strokeStyle = 'rgba(255,255,255,0.1)';
-      ctx.lineWidth = 1;
+      ctx.setLineDash([2, 4]);
       ctx.beginPath();
       ctx.moveTo(0, midY); ctx.lineTo(w, midY);
       ctx.stroke();
+      ctx.setLineDash([]);
 
-      const activeSeries = WAVE_SERIES.filter(s => s.selected);
+      // 波形ライン (発光調ネオン)
+      const windowMs = 4000; // 前後±2.0秒 = 4000ms
+      const pts = 70;
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 3.0;
+      ctx.shadowColor = color;
+      ctx.shadowBlur = 8;
+      ctx.beginPath();
 
-      // 1. 動画Aの波形描画 (自選手: 実線)
-      if (waveSource === 'both' || waveSource === 'A') {
-        activeSeries.forEach(series => {
-          ctx.strokeStyle = series.color;
-          ctx.lineWidth = series.id.includes('Total') ? 2.2 : 1.2;
-          ctx.setLineDash([]);
-          ctx.beginPath();
-
-          let scaleY = 16.0;
-          if (series.unit === '°/s') scaleY = 0.08;
-          if (series.unit === '°') scaleY = 0.25;
-
-          for (let i = 0; i < sensorDataA.length; i++) {
-            const rec = sensorDataA[i];
-            const x = (rec.ms / totalMs) * w;
-            const val = getRecordValue(rec, series.id);
-            const y = Math.max(2, Math.min(h - 2, midY - (val * scaleY)));
-            if (i === 0) ctx.moveTo(x, y);
-            else ctx.lineTo(x, y);
-          }
-          ctx.stroke();
-        });
+      for (let i = 0; i <= pts; i++) {
+        const frac = i / pts;
+        const curMs = (centerMs - 2000) + (frac * windowMs);
+        const g = gFunc(curMs);
+        const x = frac * w;
+        const y = Math.max(4, Math.min(h - 4, midY - ((g - 1.0) * (h * 0.55))));
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
       }
+      ctx.stroke();
+      ctx.shadowBlur = 0; // リセット
 
-      // 2. 動画Bの波形描画 (比較対象/お手本: 破線)
-      if (waveSource === 'both' || waveSource === 'B') {
-        activeSeries.forEach(series => {
-          ctx.strokeStyle = series.color;
-          ctx.lineWidth = series.id.includes('Total') ? 1.8 : 1.0;
-          ctx.setLineDash([5, 3]); // 破線
-          ctx.beginPath();
+      // 中央 NOW マーカー (映像の上に浮かぶ垂直ライン)
+      const cx = w / 2;
+      ctx.strokeStyle = '#EF4444';
+      ctx.lineWidth = 2.0;
+      ctx.setLineDash([3, 2]);
+      ctx.beginPath();
+      ctx.moveTo(cx, 0); ctx.lineTo(cx, h);
+      ctx.stroke();
+      ctx.setLineDash([]);
 
-          let scaleY = 16.0;
-          if (series.unit === '°/s') scaleY = 0.08;
-          if (series.unit === '°') scaleY = 0.25;
+      // NOW ドット
+      ctx.fillStyle = '#EF4444';
+      ctx.beginPath();
+      ctx.arc(cx, midY - ((gFunc(centerMs) - 1.0) * (h * 0.55)), 5, 0, Math.PI * 2);
+      ctx.fill();
+    }
 
-          for (let i = 0; i < sensorDataB.length; i++) {
-            const rec = sensorDataB[i];
-            const x = (rec.ms / totalMs) * w;
-            const val = getRecordValue(rec, series.id);
-            const y = Math.max(2, Math.min(h - 2, midY - (val * scaleY)));
-            if (i === 0) ctx.moveTo(x, y);
-            else ctx.lineTo(x, y);
-          }
-          ctx.stroke();
-        });
-        ctx.setLineDash([]);
+    // --- タイムコード整形 ---
+    function formatTime(ms) {
+      const s = Math.floor(ms / 1000);
+      const f = Math.floor((ms % 1000) / 10);
+      const min = Math.floor(s / 60);
+      const sec = s % 60;
+      return `${String(min).padStart(2, '0')}:${String(sec).padStart(2, '0')}.${String(f).padStart(2, '0')}`;
+    }
+
+    // --- 全体フレーム描画 ---
+    function renderFrame() {
+      // 1. 各動画の再生位置計算
+      const timeB = isSyncLocked ? Math.max(0, timeA + baseOffsetMs + manualOffsetMs) : Math.max(0, timeA + manualOffsetMs);
+
+      // 2. 左画面 (動画A ＋ その上に直接波形A)
+      drawRunner(ctxVA, cvA.width, cvA.height, timeA, '#00E5FF', false);
+      drawDirectWaveOverlay(ctxWA, cwA.width, cwA.height, timeA, '#00E5FF', getGA);
+      document.getElementById('timeA').innerText = formatTime(timeA);
+
+      // 3. 右画面 (動画B ＋ その上に直接波形B)
+      drawRunner(ctxVB, cvB.width, cvB.height, timeB, '#FF7043', true);
+      drawDirectWaveOverlay(ctxWB, cwB.width, cwB.height, timeB, '#FF7043', getGB);
+      document.getElementById('timeB').innerText = formatTime(timeB);
+
+      // 4. センサー数値更新
+      const ga = getGA(timeA);
+      const gb = getGB(timeB);
+      document.getElementById('valA').innerText = `${ga.toFixed(2)} G`;
+      document.getElementById('valB').innerText = `${gb.toFixed(2)} G`;
+
+      const diff = gb - ga;
+      const sign = diff >= 0 ? '+' : '';
+      const diffBadge = document.getElementById('diff-badge');
+      diffBadge.innerText = `踏み込み差: ${sign}${diff.toFixed(2)}G (${diff >= 0 ? '今回大会が強力' : '過去大会が強力'})`;
+    }
+
+    // --- アニメーションループ ---
+    let lastStamp = 0;
+    function animLoop(stamp) {
+      if (isPlaying) {
+        if (!lastStamp) lastStamp = stamp;
+        const delta = (stamp - lastStamp) * playbackSpeed;
+        lastStamp = stamp;
+        timeA += delta;
+        if (timeA > totalMs) timeA = 0;
+        renderFrame();
+      } else {
+        lastStamp = 0;
       }
-
-      // 再生ヘッド A (黄色縦ライン: 自選手)
-      if (waveSource === 'both' || waveSource === 'A') {
-        const headXA = (currentMs / totalMs) * w;
-        ctx.strokeStyle = '#FFD600';
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.moveTo(headXA, 0); ctx.lineTo(headXA, h);
-        ctx.stroke();
-
-        ctx.fillStyle = '#FFD600';
-        ctx.beginPath();
-        ctx.moveTo(headXA - 5, 0); ctx.lineTo(headXA + 5, 0); ctx.lineTo(headXA, 7);
-        ctx.fill();
-      }
-
-      // 再生ヘッド B (赤色破線縦ライン: お手本の同期位置)
-      if (waveSource === 'both' || waveSource === 'B') {
-        const posB = isSyncLocked ? Math.max(0, currentMs + baseOffsetMs + (manualOffsetSec * 1000)) : currentMs;
-        const headXB = (posB / totalMs) * w;
-        ctx.strokeStyle = '#FF5252';
-        ctx.lineWidth = 1.8;
-        ctx.setLineDash([4, 2]);
-        ctx.beginPath();
-        ctx.moveTo(headXB, 0); ctx.lineTo(headXB, h);
-        ctx.stroke();
-        ctx.setLineDash([]);
-
-        ctx.fillStyle = '#FF5252';
-        ctx.beginPath();
-        ctx.moveTo(headXB - 5, h); ctx.lineTo(headXB + 5, h); ctx.lineTo(headXB, h - 7);
-        ctx.fill();
-      }
-
-    // 波形キャンバスクリックでシーク
-    document.getElementById('wave-canvas').onclick = e => {
-      const rect = e.target.getBoundingClientRect();
-      const frac = (e.clientX - rect.left) / rect.width;
-      currentMs = Math.max(0, Math.min(totalMs, frac * totalMs));
-      updateUI();
-    };
-
-    // --- アノテーション＆グリッド描画 ---
-    function setTool(t) {
-      activeTool = t;
-      document.querySelectorAll('.tool-btn').forEach(b => b.classList.remove('active'));
-      const btn = document.getElementById(`tool-${t}`);
-      if (btn) btn.classList.add('active');
-      currentPoints = [];
+      requestAnimationFrame(animLoop);
     }
-
-    function setColor(c, el) {
-      strokeColor = c;
-      document.querySelectorAll('.color-dot').forEach(d => d.classList.remove('active'));
-      el.classList.add('active');
-    }
-
-    function toggleGrid() {
-      showGrid = !showGrid;
-      document.getElementById('grid-btn').classList.toggle('active', showGrid);
-      drawAnnotations();
-    }
-
-    function togglePlumb() {
-      showPlumb = !showPlumb;
-      document.getElementById('plumb-btn').classList.toggle('active', showPlumb);
-      drawAnnotations();
-    }
-
-    function clearDrawings() {
-      drawingObjects = [];
-      currentPoints = [];
-      drawAnnotations();
-    }
-
-    function initCanvasEvents() {
-      const canvas = document.getElementById('draw-canvas');
-      let isDrawing = false;
-
-      canvas.onmousedown = e => {
-        if (activeTool === 'none') return;
-        const rect = canvas.getBoundingClientRect();
-        const pt = { x: e.clientX - rect.left, y: e.clientY - rect.top };
-
-        if (activeTool === 'angle') {
-          currentPoints.push(pt);
-          if (currentPoints.length === 3) {
-            const angle = calcAngle(currentPoints[0], currentPoints[1], currentPoints[2]);
-            drawingObjects.push({ type: 'angle', points: [...currentPoints], color: strokeColor, angle });
-            currentPoints = [];
-          }
-          drawAnnotations();
-          return;
-        }
-
-        isDrawing = true;
-        currentPoints = [pt];
-      };
-
-      canvas.onmousemove = e => {
-        if (!isDrawing) return;
-        const rect = canvas.getBoundingClientRect();
-        const pt = { x: e.clientX - rect.left, y: e.clientY - rect.top };
-        if (activeTool === 'pen') {
-          currentPoints.push(pt);
-        } else {
-          currentPoints[1] = pt;
-        }
-        drawAnnotations();
-      };
-
-      window.onmouseup = () => {
-        if (isDrawing && currentPoints.length > 1) {
-          drawingObjects.push({ type: activeTool, points: [...currentPoints], color: strokeColor });
-          currentPoints = [];
-        }
-        isDrawing = false;
-        drawAnnotations();
-      };
-    }
-
-    function calcAngle(pA, pB, pC) {
-      const v1x = pA.x - pB.x, v1y = pA.y - pB.y;
-      const v2x = pC.x - pB.x, v2y = pC.y - pB.y;
-      const dot = v1x * v2x + v1y * v2y;
-      const len1 = Math.sqrt(v1x * v1x + v1y * v1y);
-      const len2 = Math.sqrt(v2x * v2x + v2y * v2y);
-      if (len1 === 0 || len2 === 0) return 0;
-      const cosT = Math.max(-1, Math.min(1, dot / (len1 * len2)));
-      return (Math.acos(cosT) * (180 / Math.PI)).toFixed(1);
-    }
-
-    function drawAnnotations() {
-      const canvas = document.getElementById('draw-canvas');
-      const ctx = canvas.getContext('2d');
-      const w = canvas.width;
-      const h = canvas.height;
-      ctx.clearRect(0, 0, w, h);
-
-      // 方眼グリッド
-      if (showGrid) {
-        ctx.strokeStyle = 'rgba(0, 229, 255, 0.15)';
-        ctx.lineWidth = 0.8;
-        for (let x = 0; x < w; x += 40) {
-          ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, h); ctx.stroke();
-        }
-        for (let y = 0; y < h; y += 40) {
-          ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke();
-        }
-      }
-
-      // 鉛直プラムライン & 水平線
-      if (showPlumb) {
-        ctx.strokeStyle = 'rgba(255, 82, 82, 0.7)';
-        ctx.lineWidth = 1.2;
-        ctx.beginPath(); ctx.moveTo(w / 2, 0); ctx.lineTo(w / 2, h); ctx.stroke();
-        ctx.beginPath(); ctx.moveTo(0, h / 2); ctx.lineTo(w, h / 2); ctx.stroke();
-      }
-
-      // 確定オブジェクト
-      [...drawingObjects, currentPoints.length ? { type: activeTool, points: currentPoints, color: strokeColor } : null]
-        .filter(Boolean)
-        .forEach(obj => {
-          ctx.strokeStyle = obj.color;
-          ctx.fillStyle = obj.color;
-          ctx.lineWidth = 3;
-
-          if (obj.type === 'pen' || obj.type === 'line') {
-            ctx.beginPath();
-            obj.points.forEach((p, idx) => {
-              if (idx === 0) ctx.moveTo(p.x, p.y);
-              else ctx.lineTo(p.x, p.y);
-            });
-            ctx.stroke();
-          } else if (obj.type === 'arrow' && obj.points.length >= 2) {
-            const p1 = obj.points[0], p2 = obj.points[1];
-            ctx.beginPath(); ctx.moveTo(p1.x, p1.y); ctx.lineTo(p2.x, p2.y); ctx.stroke();
-            const ang = Math.atan2(p2.y - p1.y, p2.x - p1.x);
-            ctx.beginPath();
-            ctx.moveTo(p2.x, p2.y);
-            ctx.lineTo(p2.x - 14 * Math.cos(ang - 0.4), p2.y - 14 * Math.sin(ang - 0.4));
-            ctx.lineTo(p2.x - 14 * Math.cos(ang + 0.4), p2.y - 14 * Math.sin(ang + 0.4));
-            ctx.fill();
-          } else if (obj.type === 'angle') {
-            ctx.beginPath();
-            obj.points.forEach((p, idx) => {
-              ctx.arc(p.x, p.y, 5, 0, Math.PI * 2);
-              if (idx > 0) {
-                ctx.moveTo(obj.points[idx-1].x, obj.points[idx-1].y);
-                ctx.lineTo(p.x, p.y);
-              }
-            });
-            ctx.stroke();
-            if (obj.angle) {
-              const b = obj.points[1];
-              ctx.fillStyle = '#FFD600';
-              ctx.fillRect(b.x + 8, b.y - 24, 60, 20);
-              ctx.fillStyle = '#000';
-              ctx.font = 'bold 12px sans-serif';
-              ctx.fillText(`${obj.angle}°`, b.x + 14, b.y - 10);
-            }
-          }
-        });
-    }
-
-    // --- エクスポート ---
-    function capturePng() {
-      alert('現在フレームの静止画 (PNG: 計測線・角度・HUD重畳) を書き出しました！');
-    }
-
-    function saveProjectJson() {
-      const data = {
-        projectId: 'PROJ_' + Date.now(),
-        currentMs,
-        viewMode,
-        manualOffsetSec,
-        selectedWaveforms: WAVE_SERIES.filter(s => s.selected).map(s => s.id),
-        annotations: drawingObjects
-      };
-      navigator.clipboard.writeText(JSON.stringify(data, null, 2));
-      alert('プロジェクト分析状態 (JSON) をクリップボードにコピーしました！');
-    }
+    requestAnimationFrame(animLoop);
   </script>
 </body>
 </html>
