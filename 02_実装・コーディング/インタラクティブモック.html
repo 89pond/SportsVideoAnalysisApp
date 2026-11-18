@@ -107,7 +107,7 @@
       z-index: 1;
     }
 
-    /* タップでファイル名を表示するバッジ (再生時は非表示) */
+    /* タップでファイル名を表示するバッジ (再生時は自動非表示) */
     .file-badge {
       position: absolute;
       top: 50px;
@@ -129,7 +129,6 @@
       border-color: rgba(255, 112, 67, 0.7);
       color: #FF7043;
     }
-    /* 再生中は自動で非表示 */
     body.is-playing .file-badge {
       opacity: 0;
       pointer-events: none;
@@ -161,13 +160,13 @@
       bottom: 40px; /* シークバーの上に配置 */
       left: 0;
       right: 0;
-      height: 120px;
+      height: 125px;
       z-index: 10;
       display: flex;
       flex-direction: column;
       justify-content: flex-end;
       padding: 6px 12px;
-      background: linear-gradient(to top, rgba(0,0,0,0.65) 0%, rgba(0,0,0,0.1) 75%, transparent 100%);
+      background: linear-gradient(to top, rgba(0,0,0,0.7) 0%, rgba(0,0,0,0.12) 75%, transparent 100%);
       pointer-events: auto;
       cursor: ew-resize;
     }
@@ -181,17 +180,30 @@
       text-shadow: 0 1px 4px rgba(0,0,0,0.9);
       pointer-events: none;
     }
-    .wave-val-pill {
-      font-family: monospace;
-      font-size: 11px;
-      background: rgba(0,0,0,0.7);
-      padding: 2px 6px;
-      border-radius: 4px;
-      border: 1px solid currentColor;
+    .wave-legend-group {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 3px;
+      font-size: 10px;
+      padding: 1px 5px;
+      border-radius: 3px;
+      background: rgba(0,0,0,0.6);
+      border: 1px solid rgba(255,255,255,0.15);
+    }
+    .legend-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
     }
     .wave-canvas {
       width: 100%;
-      height: 85px;
+      height: 90px;
       pointer-events: none;
     }
 
@@ -231,7 +243,7 @@
     /* 個別調整モード（🔓）時の専用コマ送りバー */
     .individual-ctrl-bar {
       position: absolute;
-      bottom: 165px;
+      bottom: 170px;
       left: 50%;
       transform: translateX(-50%);
       background: rgba(15, 20, 28, 0.9);
@@ -318,22 +330,24 @@
       font-weight: bold;
     }
 
-    /* 設定ドロワー / パネル (波形選択・カラー・速度) */
+    /* 設定ドロワー / パネル (波形選択・各波形カラー・速度) */
     #settings-drawer {
       position: absolute;
       top: 48px;
       right: 16px;
-      width: 320px;
-      background: rgba(18, 24, 34, 0.94);
+      width: 350px;
+      max-height: 80vh;
+      overflow-y: auto;
+      background: rgba(18, 24, 34, 0.95);
       backdrop-filter: blur(16px);
       border: 1px solid rgba(0, 229, 255, 0.35);
       border-radius: 10px;
-      padding: 12px;
+      padding: 14px;
       z-index: 60;
       display: none;
       flex-direction: column;
-      gap: 12px;
-      box-shadow: 0 10px 40px rgba(0,0,0,0.8);
+      gap: 14px;
+      box-shadow: 0 10px 40px rgba(0,0,0,0.85);
       animation: fadeIn 0.2s ease;
     }
     #settings-drawer.active {
@@ -346,50 +360,78 @@
       display: flex;
       justify-content: space-between;
       border-bottom: 1px solid rgba(255,255,255,0.1);
-      padding-bottom: 4px;
+      padding-bottom: 6px;
     }
     .section-label {
       font-size: 11px;
       color: #bbb;
-      margin-bottom: 4px;
+      margin-bottom: 6px;
       display: flex;
       justify-content: space-between;
     }
-    .chip-container {
+    .wave-item-row {
       display: flex;
-      flex-wrap: wrap;
-      gap: 4px;
-    }
-    .chip {
-      font-size: 10px;
-      padding: 3px 8px;
-      border-radius: 12px;
-      border: 1px solid rgba(255,255,255,0.2);
-      background: rgba(255,255,255,0.06);
-      color: #888;
-      cursor: pointer;
-    }
-    .chip.selected {
-      background: rgba(0, 229, 255, 0.2);
-      border-color: #00E5FF;
-      color: #00E5FF;
-      font-weight: bold;
-    }
-    .color-swatch-row {
-      display: flex;
-      gap: 6px;
       align-items: center;
+      justify-content: space-between;
+      padding: 4px 6px;
+      border-radius: 6px;
+      background: rgba(255,255,255,0.04);
+      margin-bottom: 4px;
+      border: 1px solid transparent;
+      transition: background 0.15s;
     }
-    .color-dot {
+    .wave-item-row:hover {
+      background: rgba(255,255,255,0.08);
+    }
+    .wave-item-row.active {
+      border-color: rgba(255,255,255,0.2);
+      background: rgba(255,255,255,0.08);
+    }
+    .wave-check-label {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 11px;
+      cursor: pointer;
+      flex: 1;
+    }
+    .color-picker-trigger {
       width: 18px;
       height: 18px;
       border-radius: 50%;
+      border: 2px solid #fff;
       cursor: pointer;
-      border: 2px solid transparent;
-      transition: transform 0.15s;
+      box-shadow: 0 0 6px rgba(0,0,0,0.5);
+      position: relative;
     }
-    .color-dot:hover { transform: scale(1.15); }
-    .color-dot.active { border-color: #fff; transform: scale(1.15); }
+    
+    /* 簡易カラーピッカーパレットポップオーバー */
+    .color-palette-pop {
+      position: absolute;
+      top: 24px;
+      right: 0;
+      background: #1A202C;
+      border: 1px solid #4A5568;
+      border-radius: 6px;
+      padding: 6px;
+      display: none;
+      gap: 6px;
+      z-index: 100;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.8);
+    }
+    .color-palette-pop.show {
+      display: flex;
+    }
+    .swatch {
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      cursor: pointer;
+      border: 1px solid rgba(255,255,255,0.3);
+    }
+    .swatch:hover {
+      transform: scale(1.2);
+    }
 
     /* スピードスライダー */
     .speed-slider-row {
@@ -422,54 +464,32 @@
       踏み込み差: +0.42G (動画Bが強力)
     </div>
     <div class="top-actions">
-      <button class="top-btn" id="settings-btn" onclick="toggleSettingsDrawer(event)">⚙ 波形・速度設定</button>
+      <button class="top-btn" id="settings-btn" onclick="toggleSettingsDrawer(event)">⚙ 波形・カラー・速度設定</button>
       <button class="top-btn" onclick="toggleAllUI(event)">全画面没入</button>
       <button class="top-btn" onclick="resetSync()">同期リセット</button>
     </div>
   </div>
 
-  <!-- 設定ドロワー (波形選択・カラー・独立速度) -->
+  <!-- 設定ドロワー (項目ごとの色分け＆カラー変更・複数波形選択・速度) -->
   <div id="settings-drawer" onclick="event.stopPropagation()">
     <div class="drawer-title">
-      <span>⚙️ 設定パレット</span>
+      <span>⚙️ 波形表示 ＆ カラー設定パレット</span>
       <span style="cursor:pointer; color:#FF5252;" onclick="toggleSettingsDrawer(event)">✕ 閉じる</span>
     </div>
 
-    <!-- 1. 表示波形の選択 (複数選択可能) -->
+    <!-- 1. 表示波形の選択 ＆ 項目別カラー変更 -->
     <div>
       <div class="section-label">
-        <span>表示波形 (複数選択可能):</span>
-        <span style="font-size:9px; color:#888;">タップでON/OFF</span>
+        <span>波形項目 (タップで表示切替 / 色丸で変更):</span>
+        <span style="font-size:9px; color:#aaa;">左右共通カラー</span>
       </div>
-      <div class="chip-container" id="wave-chips-container">
+      <div id="wave-items-list">
         <!-- JS動的生成 -->
       </div>
     </div>
 
-    <!-- 2. 波形カラー選択 -->
-    <div>
-      <div class="section-label"><span>動画A 波形カラー:</span></div>
-      <div class="color-swatch-row" id="color-row-a">
-        <span class="color-dot active" style="background:#00E5FF;" onclick="setColor('A', '#00E5FF')"></span>
-        <span class="color-dot" style="background:#00E676;" onclick="setColor('A', '#00E676')"></span>
-        <span class="color-dot" style="background:#FFD600;" onclick="setColor('A', '#FFD600')"></span>
-        <span class="color-dot" style="background:#E040FB;" onclick="setColor('A', '#E040FB')"></span>
-        <span class="color-dot" style="background:#FFFFFF;" onclick="setColor('A', '#FFFFFF')"></span>
-      </div>
-    </div>
-    <div>
-      <div class="section-label"><span>動画B 波形カラー:</span></div>
-      <div class="color-swatch-row" id="color-row-b">
-        <span class="color-dot active" style="background:#FF7043;" onclick="setColor('B', '#FF7043')"></span>
-        <span class="color-dot" style="background:#FF5252;" onclick="setColor('B', '#FF5252')"></span>
-        <span class="color-dot" style="background:#7C4DFF;" onclick="setColor('B', '#7C4DFF')"></span>
-        <span class="color-dot" style="background:#18FFFF;" onclick="setColor('B', '#18FFFF')"></span>
-        <span class="color-dot" style="background:#EEFF41;" onclick="setColor('B', '#EEFF41')"></span>
-      </div>
-    </div>
-
-    <!-- 3. 動画ごとの再生速度スライダー (0.1x〜2.0x 倍速対応) -->
-    <div>
+    <!-- 2. 動画ごとの再生速度スライダー (0.1x〜2.0x 倍速対応) -->
+    <div style="border-top:1px solid rgba(255,255,255,0.1); padding-top:10px;">
       <div class="section-label">
         <span>動画A 速度: <span id="speed-label-a" style="color:#00E5FF; font-weight:bold;">0.25x</span></span>
       </div>
@@ -496,7 +516,7 @@
 
     <!-- ================= 左画面: 動画 A ================= -->
     <div class="screen-half left-screen" id="screenA">
-      <!-- タップでファイル名を表示 (再生時は非表示) -->
+      <!-- タップでファイル名を表示 (再生時は自動非表示) -->
       <div class="file-badge" id="fileBadgeA" onclick="toggleFileName('A', event)">
         <span id="fileNameA">📁 20261015_秋季大会_走幅跳_決勝.mp4</span>
       </div>
@@ -505,11 +525,13 @@
       <!-- 背景動画キャンバス -->
       <canvas id="canvas-video-a" class="video-canvas"></canvas>
 
-      <!-- 映像の真上に浮かび上がる波形オーバーレイ -->
+      <!-- 映像の真上に浮かび上がる波形オーバーレイ (項目ごとに色分け) -->
       <div class="wave-overlay-layer" id="overlayA" title="ドラッグして直接シーク可能">
         <div class="wave-tag-row">
-          <span id="wave-tag-a" style="color:#00E5FF;">📊 波形 (±2s)</span>
-          <span class="wave-val-pill" id="valA" style="color:#00E5FF;">1.85 G</span>
+          <div class="wave-legend-group" id="legendA">
+            <!-- 凡例を動的生成 -->
+          </div>
+          <span class="wave-val-pill" id="valA">1.85 G</span>
         </div>
         <canvas id="canvas-wave-a" class="wave-canvas"></canvas>
       </div>
@@ -530,7 +552,7 @@
 
     <!-- ================= 右画面: 動画 B ================= -->
     <div class="screen-half right-screen" id="screenB">
-      <!-- タップでファイル名を表示 (再生時は非表示) -->
+      <!-- タップでファイル名を表示 (再生時は自動非表示) -->
       <div class="file-badge b" id="fileBadgeB" onclick="toggleFileName('B', event)">
         <span id="fileNameB">📁 20261102_県選手権_走幅跳_3回目.mp4</span>
       </div>
@@ -539,11 +561,13 @@
       <!-- 背景動画キャンバス -->
       <canvas id="canvas-video-b" class="video-canvas"></canvas>
 
-      <!-- 映像の真上に浮かび上がる波形オーバーレイ -->
+      <!-- 映像の真上に浮かび上がる波形オーバーレイ (項目ごとに色分け、同じ項目は左と同じ色) -->
       <div class="wave-overlay-layer" id="overlayB" title="ドラッグして直接シーク可能">
         <div class="wave-tag-row">
-          <span id="wave-tag-b" style="color:#FF7043;">📊 波形 (±2s)</span>
-          <span class="wave-val-pill" id="valB" style="color:#FF7043;">2.27 G</span>
+          <div class="wave-legend-group" id="legendB">
+            <!-- 凡例を動的生成 -->
+          </div>
+          <span class="wave-val-pill" id="valB">2.27 G</span>
         </div>
         <canvas id="canvas-wave-b" class="wave-canvas"></canvas>
       </div>
@@ -604,21 +628,29 @@
     let speedA = 0.25;
     let speedB = 0.25;
 
-    // 波形カラー
-    let colorA = '#00E5FF';
-    let colorB = '#FF7043';
+    // 選択可能なプリセットパレット
+    const PRESET_COLORS = [
+      '#FFD740', // ゴールド
+      '#FF5252', // レッド
+      '#00E5FF', // シアン
+      '#69F0AE', // ネオングリーン
+      '#FF4081', // ピンク
+      '#7C4DFF', // パープル
+      '#FF9100', // オレンジ
+      '#FFFFFF', // ホワイト
+    ];
 
-    // 波形系列定義 (複数選択可能)
+    // 波形系列定義 (項目ごとに初期色を色分け、左右共通ベース)
     const WAVE_SERIES = [
-      { id: 'accTotal', label: 'Acc 合成G (合算)', unit: 'g', selected: true },
-      { id: 'accX', label: 'Acc X軸', unit: 'g', selected: false },
-      { id: 'accY', label: 'Acc Y軸', unit: 'g', selected: false },
-      { id: 'accZ', label: 'Acc Z軸', unit: 'g', selected: false },
-      { id: 'gyrTotal', label: 'Gyro 合成 (合算)', unit: '°/s', selected: false },
-      { id: 'gyrX', label: 'Gyro X軸', unit: '°/s', selected: false },
-      { id: 'gyrY', label: 'Gyro Y軸', unit: '°/s', selected: false },
-      { id: 'gyrZ', label: 'Gyro Z軸', unit: '°/s', selected: false },
-      { id: 'angTotal', label: 'Angle 合成', unit: '°', selected: false },
+      { id: 'accTotal', label: 'Acc 合成G (合算)', color: '#FFD740', unit: 'g', selected: true },
+      { id: 'accX',     label: 'Acc X軸',         color: '#FF5252', unit: 'g', selected: true },
+      { id: 'accY',     label: 'Acc Y軸',         color: '#69F0AE', unit: 'g', selected: false },
+      { id: 'accZ',     label: 'Acc Z軸',         color: '#40C4FF', unit: 'g', selected: false },
+      { id: 'gyrTotal', label: 'Gyro 合成 (合算)', color: '#FF4081', unit: '°/s', selected: false },
+      { id: 'gyrX',     label: 'Gyro X軸',         color: '#FF9100', unit: '°/s', selected: false },
+      { id: 'gyrY',     label: 'Gyro Y軸',         color: '#00E676', unit: '°/s', selected: false },
+      { id: 'gyrZ',     label: 'Gyro Z軸',         color: '#7C4DFF', unit: '°/s', selected: false },
+      { id: 'angTotal', label: 'Angle 合成',       color: '#FFFFFF', unit: '°', selected: false },
     ];
 
     // キャンバス取得
@@ -645,26 +677,105 @@
     }
     window.addEventListener('resize', resize);
     window.addEventListener('load', () => {
-      initWaveChips();
+      initWaveSettingsList();
       resize();
       initDragSeek();
       renderFrame();
     });
 
-    // --- 波形選択チップ初期化 ---
-    function initWaveChips() {
-      const container = document.getElementById('wave-chips-container');
+    // --- 波形設定リストの動的生成 (チェック & カラーピッカー) ---
+    function initWaveSettingsList() {
+      const container = document.getElementById('wave-items-list');
       container.innerHTML = '';
-      WAVE_SERIES.forEach(s => {
-        const chip = document.createElement('div');
-        chip.className = `chip ${s.selected ? 'selected' : ''}`;
-        chip.innerText = s.label;
-        chip.onclick = () => {
+
+      WAVE_SERIES.forEach((s, idx) => {
+        const row = document.createElement('div');
+        row.className = `wave-item-row ${s.selected ? 'active' : ''}`;
+
+        // チェック＆ラベル
+        const labelBox = document.createElement('div');
+        labelBox.className = 'wave-check-label';
+        labelBox.innerHTML = `
+          <input type="checkbox" ${s.selected ? 'checked' : ''} style="accent-color:${s.color}; cursor:pointer;">
+          <span>${s.label}</span>
+        `;
+        labelBox.onclick = () => {
           s.selected = !s.selected;
-          chip.classList.toggle('selected', s.selected);
+          row.classList.toggle('active', s.selected);
+          labelBox.querySelector('input').checked = s.selected;
+          updateLegends();
           renderFrame();
         };
-        container.appendChild(chip);
+
+        // カラーピッカートリガー
+        const colorBox = document.createElement('div');
+        colorBox.style.position = 'relative';
+
+        const trigger = document.createElement('div');
+        trigger.className = 'color-picker-trigger';
+        trigger.style.backgroundColor = s.color;
+        trigger.title = 'カラーを変更';
+
+        // ポップオーバーパレット
+        const pop = document.createElement('div');
+        pop.className = 'color-palette-pop';
+        PRESET_COLORS.forEach(c => {
+          const swatch = document.createElement('div');
+          swatch.className = 'swatch';
+          swatch.style.backgroundColor = c;
+          swatch.onclick = (e) => {
+            e.stopPropagation();
+            s.color = c;
+            trigger.style.backgroundColor = c;
+            labelBox.querySelector('input').style.accentColor = c;
+            pop.classList.remove('show');
+            updateLegends();
+            renderFrame();
+          };
+          pop.appendChild(swatch);
+        });
+
+        trigger.onclick = (e) => {
+          e.stopPropagation();
+          document.querySelectorAll('.color-palette-pop').forEach(p => { if (p !== pop) p.classList.remove('show'); });
+          pop.classList.toggle('show');
+        };
+
+        colorBox.appendChild(trigger);
+        colorBox.appendChild(pop);
+
+        row.appendChild(labelBox);
+        row.appendChild(colorBox);
+        container.appendChild(row);
+      });
+
+      updateLegends();
+    }
+
+    // --- 動画上の波形凡例を更新 ---
+    function updateLegends() {
+      const legA = document.getElementById('legendA');
+      const legB = document.getElementById('legendB');
+      legA.innerHTML = '';
+      legB.innerHTML = '';
+
+      const active = WAVE_SERIES.filter(s => s.selected);
+      if (active.length === 0) {
+        legA.innerHTML = '<span style="color:#888;">(波形非表示)</span>';
+        legB.innerHTML = '<span style="color:#888;">(波形非表示)</span>';
+        return;
+      }
+
+      active.forEach(s => {
+        const itemA = document.createElement('div');
+        itemA.className = 'legend-item';
+        itemA.innerHTML = `<span class="legend-dot" style="background:${s.color};"></span><span>${s.label}</span>`;
+        legA.appendChild(itemA);
+
+        const itemB = document.createElement('div');
+        itemB.className = 'legend-item';
+        itemB.innerHTML = `<span class="legend-dot" style="background:${s.color};"></span><span>${s.label}</span>`;
+        legB.appendChild(itemB);
       });
     }
 
@@ -675,32 +786,6 @@
       const btn = document.getElementById('settings-btn');
       drawer.classList.toggle('active');
       btn.classList.toggle('active');
-    }
-
-    // --- カラー変更 ---
-    function setColor(target, hex) {
-      if (target === 'A') {
-        colorA = hex;
-        document.querySelectorAll('#color-row-a .color-dot').forEach(d => {
-          d.classList.toggle('active', d.style.backgroundColor === hex || rgbToHex(d.style.backgroundColor) === hex);
-        });
-        document.getElementById('wave-tag-a').style.color = hex;
-        document.getElementById('valA').style.color = hex;
-      } else {
-        colorB = hex;
-        document.querySelectorAll('#color-row-b .color-dot').forEach(d => {
-          d.classList.toggle('active', d.style.backgroundColor === hex || rgbToHex(d.style.backgroundColor) === hex);
-        });
-        document.getElementById('wave-tag-b').style.color = hex;
-        document.getElementById('valB').style.color = hex;
-      }
-      renderFrame();
-    }
-    function rgbToHex(rgb) {
-      if (rgb.startsWith('#')) return rgb;
-      const rgbValues = rgb.match(/\d+/g);
-      if (!rgbValues) return rgb;
-      return '#' + rgbValues.slice(0,3).map(x => parseInt(x).toString(16).padStart(2, '0')).join('').toUpperCase();
     }
 
     // --- 速度設定 (0.1x〜2.0x 倍速) ---
@@ -956,7 +1041,7 @@
       ctx.lineTo(k2x + Math.sin(leg2 - 0.35) * 20, k2y + Math.cos(leg2 - 0.35) * 20);
       ctx.stroke();
 
-      // 接地インパクト円
+      // 接地インパクト円 (踏み込み瞬間エフェクト)
       if (bounce < 2.5) {
         ctx.strokeStyle = color;
         ctx.lineWidth = 2.0;
@@ -966,8 +1051,8 @@
       }
     }
 
-    // --- 映像上ダイレクト波形描画 (複数選択対応) ---
-    function drawDirectWaveOverlay(ctx, w, h, centerMs, color, isB) {
+    // --- 映像上ダイレクト波形描画 (項目ごとに各々の設定色で描画) ---
+    function drawDirectWaveOverlay(ctx, w, h, centerMs, isB) {
       ctx.clearRect(0, 0, w, h);
 
       // ゼロ基準線
@@ -986,11 +1071,11 @@
       const activeSeries = WAVE_SERIES.filter(s => s.selected);
       if (activeSeries.length === 0) return;
 
-      activeSeries.forEach((series, sIdx) => {
-        ctx.strokeStyle = sIdx === 0 ? color : lightenColor(color, sIdx * 25);
+      activeSeries.forEach(series => {
+        ctx.strokeStyle = series.color;
         ctx.lineWidth = series.id.includes('Total') ? 2.8 : 1.6;
-        ctx.shadowColor = color;
-        ctx.shadowBlur = sIdx === 0 ? 6 : 0;
+        ctx.shadowColor = series.color;
+        ctx.shadowBlur = series.id.includes('Total') ? 6 : 0;
         ctx.beginPath();
 
         for (let i = 0; i <= pts; i++) {
@@ -1005,6 +1090,9 @@
           else if (series.id === 'accY') { val = metrics.ay; scale = h * 0.4; }
           else if (series.id === 'accZ') { val = metrics.az - 1.0; scale = h * 0.4; }
           else if (series.id === 'gyrTotal') { val = metrics.totalGyr / 400; scale = h * 0.45; }
+          else if (series.id === 'gyrX') { val = metrics.gx / 400; scale = h * 0.4; }
+          else if (series.id === 'gyrY') { val = metrics.gy / 400; scale = h * 0.4; }
+          else if (series.id === 'gyrZ') { val = metrics.gz / 400; scale = h * 0.4; }
           else if (series.id === 'angTotal') { val = metrics.totalAng / 50; scale = h * 0.45; }
 
           const x = frac * w;
@@ -1026,17 +1114,17 @@
       ctx.stroke();
       ctx.setLineDash([]);
 
-      // NOW ドット
+      // 代表値ドット (選択中の先頭項目)
+      const primarySeries = activeSeries[0];
       const curMetrics = calcSensorMetrics(centerMs, isB);
-      const curY = Math.max(4, Math.min(h - 4, midY - ((curMetrics.totalG - 1.0) * (h * 0.55))));
-      ctx.fillStyle = '#EF4444';
+      let pVal = curMetrics.totalG - 1.0;
+      let pScale = h * 0.55;
+      if (primarySeries.id === 'accX') { pVal = curMetrics.ax; pScale = h * 0.4; }
+      const curY = Math.max(4, Math.min(h - 4, midY - (pVal * pScale)));
+      ctx.fillStyle = primarySeries.color;
       ctx.beginPath();
       ctx.arc(cx, curY, 5, 0, Math.PI * 2);
       ctx.fill();
-    }
-
-    function lightenColor(color, percent) {
-      return color; // シンプルに同じ色基調
     }
 
     // --- タイムコード整形 ---
@@ -1051,18 +1139,18 @@
     // --- 全体フレーム描画 ---
     function renderFrame() {
       // 1. 左画面 (動画A ＋ その上に直接波形A)
-      drawRunner(ctxVA, cvA.width, cvA.height, timeA, colorA, false);
-      drawDirectWaveOverlay(ctxWA, cwA.width, cwA.height, timeA, colorA, false);
+      drawRunner(ctxVA, cvA.width, cvA.height, timeA, '#00E5FF', false);
+      drawDirectWaveOverlay(ctxWA, cwA.width, cwA.height, timeA, false);
       document.getElementById('timeA').innerText = formatTime(timeA);
       document.getElementById('seekA').value = timeA;
 
       // 2. 右画面 (動画B ＋ その上に直接波形B)
-      drawRunner(ctxVB, cvB.width, cvB.height, timeB, colorB, true);
-      drawDirectWaveOverlay(ctxWB, cwB.width, cwB.height, timeB, colorB, true);
+      drawRunner(ctxVB, cvB.width, cvB.height, timeB, '#FF7043', true);
+      drawDirectWaveOverlay(ctxWB, cwB.width, cwB.height, timeB, true);
       document.getElementById('timeB').innerText = formatTime(timeB);
       document.getElementById('seekB').value = timeB;
 
-      // 3. センサー数値更新
+      // 3. センサー数値更新 (合成G)
       const ga = calcSensorMetrics(timeA, false).totalG;
       const gb = calcSensorMetrics(timeB, true).totalG;
       document.getElementById('valA').innerText = `${ga.toFixed(2)} G`;
@@ -1083,11 +1171,9 @@
         lastStamp = stamp;
 
         if (isSyncLocked) {
-          // 同期時はAの速度で一緒に進む
           timeA += delta * speedA;
           timeB = timeA + syncOffsetMs;
         } else {
-          // 個別モード時は各動画の独立した速度で進む (片方倍速・片方スロー対応)
           timeA += delta * speedA;
           timeB += delta * speedB;
         }
