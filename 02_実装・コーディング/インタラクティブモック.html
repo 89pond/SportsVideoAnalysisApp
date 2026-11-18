@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>MotionSync Analytics - 左右2画面 デュアル動作分析モック</title>
+  <title>MotionSync Analytics - デュアル動画・波形統合分析</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; }
     body {
@@ -24,7 +24,7 @@
       left: 0;
       right: 0;
       height: 44px;
-      background: linear-gradient(to bottom, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0.4) 70%, transparent 100%);
+      background: linear-gradient(to bottom, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0.3) 70%, transparent 100%);
       display: flex;
       align-items: center;
       justify-content: space-between;
@@ -73,8 +73,9 @@
       transition: 0.2s;
     }
     .top-btn:hover { background: rgba(0,229,255,0.25); border-color: #00E5FF; }
+    .top-btn.active { background: #00E5FF; color: #000; font-weight: bold; }
 
-    /* メイン 2画面スプリットビューポート (画面全体100%) */
+    /* メイン 2画面スプリットビューポート */
     #viewport-container {
       flex: 1;
       width: 100%;
@@ -82,10 +83,8 @@
       position: relative;
       display: flex;
       background: #05070A;
-      cursor: default;
     }
 
-    /* 各画面 (左: 過去大会 / 右: 今回大会) */
     .screen-half {
       flex: 1;
       height: 100%;
@@ -108,30 +107,35 @@
       z-index: 1;
     }
 
-    /* 映像上のバッジ (動画タイトル・タイムコード) */
-    .video-header-badge {
+    /* タップでファイル名を表示するバッジ (再生時は非表示) */
+    .file-badge {
       position: absolute;
       top: 50px;
       left: 14px;
-      z-index: 20;
-      background: rgba(0, 0, 0, 0.65);
+      z-index: 25;
+      background: rgba(0, 0, 0, 0.7);
       backdrop-filter: blur(8px);
       border: 1px solid rgba(0, 229, 255, 0.6);
       color: #00E5FF;
       font-size: 11px;
       font-weight: bold;
-      padding: 3px 10px;
+      padding: 4px 10px;
       border-radius: 6px;
-      display: flex;
-      align-items: center;
-      gap: 6px;
+      cursor: pointer;
       box-shadow: 0 2px 8px rgba(0,0,0,0.5);
-      transition: opacity 0.3s;
+      transition: opacity 0.25s, transform 0.25s;
     }
-    .video-header-badge.b {
+    .file-badge.b {
       border-color: rgba(255, 112, 67, 0.7);
       color: #FF7043;
     }
+    /* 再生中は自動で非表示 */
+    body.is-playing .file-badge {
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    /* 各動画のタイムコード */
     .video-time-badge {
       position: absolute;
       top: 50px;
@@ -147,24 +151,23 @@
       border: 1px solid rgba(255,255,255,0.15);
       transition: opacity 0.3s;
     }
-    .hidden-ui .video-header-badge,
-    .hidden-ui .video-time-badge {
-      opacity: 0.2;
+    body.is-playing .video-time-badge {
+      opacity: 0.35;
     }
 
     /* 映像の上に直接透過オーバーレイする波形レイヤー */
     .wave-overlay-layer {
       position: absolute;
-      bottom: 0;
+      bottom: 40px; /* シークバーの上に配置 */
       left: 0;
       right: 0;
-      height: 140px;
+      height: 120px;
       z-index: 10;
       display: flex;
       flex-direction: column;
       justify-content: flex-end;
-      padding: 8px 14px;
-      background: linear-gradient(to top, rgba(0,0,0,0.7) 0%, rgba(0,0,0,0.15) 75%, transparent 100%);
+      padding: 6px 12px;
+      background: linear-gradient(to top, rgba(0,0,0,0.65) 0%, rgba(0,0,0,0.1) 75%, transparent 100%);
       pointer-events: auto;
       cursor: ew-resize;
     }
@@ -172,9 +175,9 @@
       display: flex;
       justify-content: space-between;
       align-items: center;
-      font-size: 11px;
+      font-size: 10px;
       font-weight: bold;
-      margin-bottom: 4px;
+      margin-bottom: 3px;
       text-shadow: 0 1px 4px rgba(0,0,0,0.9);
       pointer-events: none;
     }
@@ -182,30 +185,63 @@
       font-family: monospace;
       font-size: 11px;
       background: rgba(0,0,0,0.7);
-      padding: 2px 8px;
+      padding: 2px 6px;
       border-radius: 4px;
       border: 1px solid currentColor;
     }
     .wave-canvas {
       width: 100%;
-      height: 90px;
+      height: 85px;
       pointer-events: none;
     }
 
-    /* 個別調整モード（🔓）時に現れる左右独立コマ送りボタン */
+    /* 各動画専用の独立シークバー (下部に配置) */
+    .video-seekbar-panel {
+      position: absolute;
+      bottom: 6px;
+      left: 8px;
+      right: 8px;
+      height: 28px;
+      background: rgba(15, 20, 28, 0.85);
+      backdrop-filter: blur(8px);
+      border: 1px solid rgba(255,255,255,0.12);
+      border-radius: 14px;
+      display: flex;
+      align-items: center;
+      padding: 0 10px;
+      gap: 8px;
+      z-index: 25;
+      transition: opacity 0.3s, transform 0.3s;
+    }
+    .video-seekbar-panel.hidden-ui {
+      opacity: 0;
+      transform: translateY(15px);
+      pointer-events: none;
+    }
+    .seek-slider {
+      flex: 1;
+      height: 4px;
+      accent-color: #00E5FF;
+      cursor: pointer;
+    }
+    .seek-slider.b {
+      accent-color: #FF7043;
+    }
+
+    /* 個別調整モード（🔓）時の専用コマ送りバー */
     .individual-ctrl-bar {
       position: absolute;
-      bottom: 148px;
+      bottom: 165px;
       left: 50%;
       transform: translateX(-50%);
-      background: rgba(15, 20, 28, 0.88);
+      background: rgba(15, 20, 28, 0.9);
       backdrop-filter: blur(12px);
       border: 1px solid rgba(255, 255, 255, 0.2);
       border-radius: 20px;
       padding: 4px 10px;
       display: none;
       align-items: center;
-      gap: 8px;
+      gap: 6px;
       z-index: 30;
       box-shadow: 0 4px 20px rgba(0,0,0,0.6);
       animation: fadeIn 0.2s ease;
@@ -227,10 +263,10 @@
     /* 中央下部に浮かぶ「極小スリガラス調ピルHUD」 */
     #floating-pill-hud {
       position: absolute;
-      bottom: 20px;
+      bottom: 42px;
       left: 50%;
       transform: translateX(-50%);
-      background: rgba(15, 20, 30, 0.85);
+      background: rgba(15, 20, 30, 0.88);
       backdrop-filter: blur(14px);
       -webkit-backdrop-filter: blur(14px);
       border: 1px solid rgba(0, 229, 255, 0.35);
@@ -238,7 +274,7 @@
       padding: 6px 14px;
       display: flex;
       align-items: center;
-      gap: 12px;
+      gap: 10px;
       z-index: 50;
       box-shadow: 0 8px 32px rgba(0, 0, 0, 0.7);
       transition: opacity 0.3s ease, transform 0.3s ease;
@@ -252,13 +288,13 @@
       background: rgba(255,255,255,0.1);
       border: 1px solid rgba(255,255,255,0.18);
       color: #fff;
-      padding: 6px 12px;
-      font-size: 12px;
+      padding: 5px 11px;
+      font-size: 11px;
       border-radius: 20px;
       cursor: pointer;
       display: flex;
       align-items: center;
-      gap: 5px;
+      gap: 4px;
       transition: 0.15s;
     }
     .pill-btn:hover { background: rgba(0,229,255,0.25); border-color: #00E5FF; }
@@ -267,9 +303,8 @@
       color: #000;
       font-weight: bold;
       border-color: #00E5FF;
-      padding: 6px 16px;
+      padding: 5px 14px;
     }
-    .pill-btn.primary:hover { background: #6effff; }
     .pill-btn.lock-active {
       background: rgba(0, 230, 118, 0.2);
       border-color: #00E676;
@@ -283,25 +318,95 @@
       font-weight: bold;
     }
 
-    /* フルスクリーン没入ヒント */
-    #fullscreen-hint {
+    /* 設定ドロワー / パネル (波形選択・カラー・速度) */
+    #settings-drawer {
       position: absolute;
-      bottom: 6px;
-      left: 50%;
-      transform: translateX(-50%);
-      font-size: 10px;
-      color: rgba(255,255,255,0.35);
-      z-index: 40;
-      pointer-events: none;
-      transition: opacity 0.3s;
+      top: 48px;
+      right: 16px;
+      width: 320px;
+      background: rgba(18, 24, 34, 0.94);
+      backdrop-filter: blur(16px);
+      border: 1px solid rgba(0, 229, 255, 0.35);
+      border-radius: 10px;
+      padding: 12px;
+      z-index: 60;
+      display: none;
+      flex-direction: column;
+      gap: 12px;
+      box-shadow: 0 10px 40px rgba(0,0,0,0.8);
+      animation: fadeIn 0.2s ease;
     }
-    .hidden-ui #fullscreen-hint {
-      opacity: 0;
+    #settings-drawer.active {
+      display: flex;
+    }
+    .drawer-title {
+      font-size: 12px;
+      font-weight: bold;
+      color: #00E5FF;
+      display: flex;
+      justify-content: space-between;
+      border-bottom: 1px solid rgba(255,255,255,0.1);
+      padding-bottom: 4px;
+    }
+    .section-label {
+      font-size: 11px;
+      color: #bbb;
+      margin-bottom: 4px;
+      display: flex;
+      justify-content: space-between;
+    }
+    .chip-container {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+    }
+    .chip {
+      font-size: 10px;
+      padding: 3px 8px;
+      border-radius: 12px;
+      border: 1px solid rgba(255,255,255,0.2);
+      background: rgba(255,255,255,0.06);
+      color: #888;
+      cursor: pointer;
+    }
+    .chip.selected {
+      background: rgba(0, 229, 255, 0.2);
+      border-color: #00E5FF;
+      color: #00E5FF;
+      font-weight: bold;
+    }
+    .color-swatch-row {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+    }
+    .color-dot {
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      cursor: pointer;
+      border: 2px solid transparent;
+      transition: transform 0.15s;
+    }
+    .color-dot:hover { transform: scale(1.15); }
+    .color-dot.active { border-color: #fff; transform: scale(1.15); }
+
+    /* スピードスライダー */
+    .speed-slider-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 11px;
+    }
+    .speed-slider {
+      flex: 1;
+      height: 4px;
+      cursor: pointer;
     }
 
     @keyframes fadeIn {
-      from { opacity: 0; transform: translate(-50%, 8px); }
-      to { opacity: 1; transform: translate(-50%, 0); }
+      from { opacity: 0; transform: translateY(-8px); }
+      to { opacity: 1; transform: translateY(0); }
     }
   </style>
 </head>
@@ -311,71 +416,146 @@
   <div id="top-bar">
     <div class="app-title">
       <span>⚡ MotionSync</span>
-      <span style="color:#aaa; font-size:11px; font-weight:normal;">| 左右2画面 デュアル比較</span>
+      <span style="color:#aaa; font-size:11px; font-weight:normal;">| 左右2画面 デュアル分析</span>
     </div>
     <div class="diff-badge" id="diff-badge">
-      踏み込み差: +0.42G (今回が強力)
+      踏み込み差: +0.42G (動画Bが強力)
     </div>
     <div class="top-actions">
-      <button class="top-btn" onclick="togglePlaySpeed()">速度: <span id="speed-label">0.25x</span></button>
+      <button class="top-btn" id="settings-btn" onclick="toggleSettingsDrawer(event)">⚙ 波形・速度設定</button>
       <button class="top-btn" onclick="toggleAllUI(event)">全画面没入</button>
       <button class="top-btn" onclick="resetSync()">同期リセット</button>
+    </div>
+  </div>
+
+  <!-- 設定ドロワー (波形選択・カラー・独立速度) -->
+  <div id="settings-drawer" onclick="event.stopPropagation()">
+    <div class="drawer-title">
+      <span>⚙️ 設定パレット</span>
+      <span style="cursor:pointer; color:#FF5252;" onclick="toggleSettingsDrawer(event)">✕ 閉じる</span>
+    </div>
+
+    <!-- 1. 表示波形の選択 (複数選択可能) -->
+    <div>
+      <div class="section-label">
+        <span>表示波形 (複数選択可能):</span>
+        <span style="font-size:9px; color:#888;">タップでON/OFF</span>
+      </div>
+      <div class="chip-container" id="wave-chips-container">
+        <!-- JS動的生成 -->
+      </div>
+    </div>
+
+    <!-- 2. 波形カラー選択 -->
+    <div>
+      <div class="section-label"><span>動画A 波形カラー:</span></div>
+      <div class="color-swatch-row" id="color-row-a">
+        <span class="color-dot active" style="background:#00E5FF;" onclick="setColor('A', '#00E5FF')"></span>
+        <span class="color-dot" style="background:#00E676;" onclick="setColor('A', '#00E676')"></span>
+        <span class="color-dot" style="background:#FFD600;" onclick="setColor('A', '#FFD600')"></span>
+        <span class="color-dot" style="background:#E040FB;" onclick="setColor('A', '#E040FB')"></span>
+        <span class="color-dot" style="background:#FFFFFF;" onclick="setColor('A', '#FFFFFF')"></span>
+      </div>
+    </div>
+    <div>
+      <div class="section-label"><span>動画B 波形カラー:</span></div>
+      <div class="color-swatch-row" id="color-row-b">
+        <span class="color-dot active" style="background:#FF7043;" onclick="setColor('B', '#FF7043')"></span>
+        <span class="color-dot" style="background:#FF5252;" onclick="setColor('B', '#FF5252')"></span>
+        <span class="color-dot" style="background:#7C4DFF;" onclick="setColor('B', '#7C4DFF')"></span>
+        <span class="color-dot" style="background:#18FFFF;" onclick="setColor('B', '#18FFFF')"></span>
+        <span class="color-dot" style="background:#EEFF41;" onclick="setColor('B', '#EEFF41')"></span>
+      </div>
+    </div>
+
+    <!-- 3. 動画ごとの再生速度スライダー (0.1x〜2.0x 倍速対応) -->
+    <div>
+      <div class="section-label">
+        <span>動画A 速度: <span id="speed-label-a" style="color:#00E5FF; font-weight:bold;">0.25x</span></span>
+      </div>
+      <div class="speed-slider-row">
+        <span>0.1x</span>
+        <input type="range" class="speed-slider" id="speed-slider-a" min="0.1" max="2.0" step="0.05" value="0.25" oninput="setSpeed('A', this.value)" style="accent-color:#00E5FF;">
+        <span>2.0x</span>
+      </div>
+    </div>
+    <div>
+      <div class="section-label">
+        <span>動画B 速度: <span id="speed-label-b" style="color:#FF7043; font-weight:bold;">0.25x</span></span>
+      </div>
+      <div class="speed-slider-row">
+        <span>0.1x</span>
+        <input type="range" class="speed-slider" id="speed-slider-b" min="0.1" max="2.0" step="0.05" value="0.25" oninput="setSpeed('B', this.value)" style="accent-color:#FF7043;">
+        <span>2.0x</span>
+      </div>
     </div>
   </div>
 
   <!-- 2. メイン 2画面スプリットビューポート -->
   <div id="viewport-container" onclick="onViewportClick(event)">
 
-    <!-- ================= 左画面: 過去の大会 (動画A + 波形A) ================= -->
+    <!-- ================= 左画面: 動画 A ================= -->
     <div class="screen-half left-screen" id="screenA">
-      <div class="video-header-badge">
-        <span style="display:inline-block; width:6px; height:6px; border-radius:50%; background:#00E5FF;"></span>
-        過去の大会 (動画 A)
+      <!-- タップでファイル名を表示 (再生時は非表示) -->
+      <div class="file-badge" id="fileBadgeA" onclick="toggleFileName('A', event)">
+        <span id="fileNameA">📁 20261015_秋季大会_走幅跳_決勝.mp4</span>
       </div>
       <div class="video-time-badge" id="timeA">00:03.20</div>
 
-      <!-- 背景の動画映像キャンバス -->
+      <!-- 背景動画キャンバス -->
       <canvas id="canvas-video-a" class="video-canvas"></canvas>
 
-      <!-- 映像の真上に浮かび上がる波形オーバーレイ (背景透明) -->
+      <!-- 映像の真上に浮かび上がる波形オーバーレイ -->
       <div class="wave-overlay-layer" id="overlayA" title="ドラッグして直接シーク可能">
         <div class="wave-tag-row">
-          <span style="color:#00E5FF;">📊 過去大会 加速度波形 (±2s)</span>
+          <span id="wave-tag-a" style="color:#00E5FF;">📊 波形 (±2s)</span>
           <span class="wave-val-pill" id="valA" style="color:#00E5FF;">1.85 G</span>
         </div>
         <canvas id="canvas-wave-a" class="wave-canvas"></canvas>
       </div>
 
+      <!-- 動画A専用シークバー -->
+      <div class="video-seekbar-panel" id="seekbar-panel-a" onclick="event.stopPropagation()">
+        <span style="font-size:10px; color:#00E5FF; font-weight:bold;">A</span>
+        <input type="range" id="seekA" class="seek-slider" min="0" max="10000" value="3200" oninput="onSeekSingle('A', this.value)">
+      </div>
+
       <!-- 個別調整モード時の単独コマ送りバー -->
-      <div class="individual-ctrl-bar" id="ind-ctrl-a">
+      <div class="individual-ctrl-bar" id="ind-ctrl-a" onclick="event.stopPropagation()">
         <span style="font-size:10px; color:#00E5FF; font-weight:bold;">動画A頭出し:</span>
         <button class="ind-btn" onclick="stepSingle('A', -33)">◀ 1コマ戻し</button>
         <button class="ind-btn" onclick="stepSingle('A', 33)">1コマ送り ▶</button>
       </div>
     </div>
 
-    <!-- ================= 右画面: 今回の大会 (動画B + 波形B) ================= -->
+    <!-- ================= 右画面: 動画 B ================= -->
     <div class="screen-half right-screen" id="screenB">
-      <div class="video-header-badge b">
-        <span style="display:inline-block; width:6px; height:6px; border-radius:50%; background:#FF7043;"></span>
-        今回の大会 (動画 B)
+      <!-- タップでファイル名を表示 (再生時は非表示) -->
+      <div class="file-badge b" id="fileBadgeB" onclick="toggleFileName('B', event)">
+        <span id="fileNameB">📁 20261102_県選手権_走幅跳_3回目.mp4</span>
       </div>
       <div class="video-time-badge" id="timeB">00:03.12</div>
 
-      <!-- 背景の動画映像キャンバス -->
+      <!-- 背景動画キャンバス -->
       <canvas id="canvas-video-b" class="video-canvas"></canvas>
 
-      <!-- 映像の真上に浮かび上がる波形オーバーレイ (背景透明) -->
+      <!-- 映像の真上に浮かび上がる波形オーバーレイ -->
       <div class="wave-overlay-layer" id="overlayB" title="ドラッグして直接シーク可能">
         <div class="wave-tag-row">
-          <span style="color:#FF7043;">📊 今回大会 加速度波形 (±2s)</span>
+          <span id="wave-tag-b" style="color:#FF7043;">📊 波形 (±2s)</span>
           <span class="wave-val-pill" id="valB" style="color:#FF7043;">2.27 G</span>
         </div>
         <canvas id="canvas-wave-b" class="wave-canvas"></canvas>
       </div>
 
+      <!-- 動画B専用シークバー -->
+      <div class="video-seekbar-panel" id="seekbar-panel-b" onclick="event.stopPropagation()">
+        <span style="font-size:10px; color:#FF7043; font-weight:bold;">B</span>
+        <input type="range" id="seekB" class="seek-slider b" min="0" max="10000" value="3120" oninput="onSeekSingle('B', this.value)">
+      </div>
+
       <!-- 個別調整モード時の単独コマ送りバー -->
-      <div class="individual-ctrl-bar" id="ind-ctrl-b">
+      <div class="individual-ctrl-bar" id="ind-ctrl-b" onclick="event.stopPropagation()">
         <span style="font-size:10px; color:#FF7043; font-weight:bold;">動画B頭出し:</span>
         <button class="ind-btn" onclick="stepSingle('B', -33)">◀ 1コマ戻し</button>
         <button class="ind-btn" onclick="stepSingle('B', 33)">1コマ送り ▶</button>
@@ -385,7 +565,7 @@
     <!-- 3. 中央下部に浮かぶ「極小スリガラス調ピルHUD」 -->
     <div id="floating-pill-hud">
       <button class="pill-btn lock-active" id="sync-lock-btn" onclick="toggleSyncLock(event)" title="同期モード / 個別頭出しモードの切り替え">
-        <span id="lock-icon">🔒</span> <span id="lock-text">同期ロック中</span>
+        <span id="lock-icon">🔒</span> <span id="lock-text">同期中</span>
       </button>
 
       <button class="pill-btn" onclick="stepDual(-33, event)" title="左右一緒に1コマ戻し">
@@ -401,27 +581,45 @@
       </button>
 
       <!-- 微調整ボタン -->
-      <div style="display:flex; gap:2px; margin-left:4px; border-left:1px solid rgba(255,255,255,0.15); padding-left:8px;">
-        <button class="pill-btn" style="padding:4px 8px; font-size:10px;" onclick="adjustOffset(-10, event)" title="Bを0.01秒早める">-0.01s</button>
-        <button class="pill-btn" style="padding:4px 8px; font-size:10px;" onclick="adjustOffset(10, event)" title="Bを0.01秒遅らせる">+0.01s</button>
+      <div style="display:flex; gap:2px; margin-left:2px; border-left:1px solid rgba(255,255,255,0.15); padding-left:6px;">
+        <button class="pill-btn" style="padding:4px 7px; font-size:10px;" onclick="adjustOffset(-10, event)" title="Bを0.01秒早める">-0.01s</button>
+        <button class="pill-btn" style="padding:4px 7px; font-size:10px;" onclick="adjustOffset(10, event)" title="Bを0.01秒遅らせる">+0.01s</button>
       </div>
     </div>
-
-    <!-- 没入モード操作ヒント -->
-    <div id="fullscreen-hint">画面タップ: UI表示/非表示切替 ｜ 左右ドラッグ: コマ送り</div>
   </div>
 
   <script>
     // --- 状態管理 ---
     let isPlaying = true;
     let isSyncLocked = true;     // true: 左右同期, false: 個別頭出し
-    let playbackSpeed = 0.25;    // 0.1x, 0.25x, 0.5x, 1.0x
     let isUiVisible = true;
 
-    let timeA = 3200;            // 動画Aの現在再生時刻 (ms)
-    let baseOffsetMs = -80;      // 動画Bの初期同期ズレ (ms)
-    let manualOffsetMs = 0;      // ユーザーによる微調整オフセット (ms)
-    let totalMs = 12000;
+    // 各動画の独立タイムライン (ms)
+    let timeA = 3200;
+    let timeB = 3120;
+    let syncOffsetMs = timeB - timeA; // 同期時のズレ量 (初期: -80ms)
+    let totalMs = 10000;
+
+    // 各動画の独立再生速度 (0.1x〜2.0x)
+    let speedA = 0.25;
+    let speedB = 0.25;
+
+    // 波形カラー
+    let colorA = '#00E5FF';
+    let colorB = '#FF7043';
+
+    // 波形系列定義 (複数選択可能)
+    const WAVE_SERIES = [
+      { id: 'accTotal', label: 'Acc 合成G (合算)', unit: 'g', selected: true },
+      { id: 'accX', label: 'Acc X軸', unit: 'g', selected: false },
+      { id: 'accY', label: 'Acc Y軸', unit: 'g', selected: false },
+      { id: 'accZ', label: 'Acc Z軸', unit: 'g', selected: false },
+      { id: 'gyrTotal', label: 'Gyro 合成 (合算)', unit: '°/s', selected: false },
+      { id: 'gyrX', label: 'Gyro X軸', unit: '°/s', selected: false },
+      { id: 'gyrY', label: 'Gyro Y軸', unit: '°/s', selected: false },
+      { id: 'gyrZ', label: 'Gyro Z軸', unit: '°/s', selected: false },
+      { id: 'angTotal', label: 'Angle 合成', unit: '°', selected: false },
+    ];
 
     // キャンバス取得
     const cvA = document.getElementById('canvas-video-a');
@@ -447,10 +645,82 @@
     }
     window.addEventListener('resize', resize);
     window.addEventListener('load', () => {
+      initWaveChips();
       resize();
       initDragSeek();
       renderFrame();
     });
+
+    // --- 波形選択チップ初期化 ---
+    function initWaveChips() {
+      const container = document.getElementById('wave-chips-container');
+      container.innerHTML = '';
+      WAVE_SERIES.forEach(s => {
+        const chip = document.createElement('div');
+        chip.className = `chip ${s.selected ? 'selected' : ''}`;
+        chip.innerText = s.label;
+        chip.onclick = () => {
+          s.selected = !s.selected;
+          chip.classList.toggle('selected', s.selected);
+          renderFrame();
+        };
+        container.appendChild(chip);
+      });
+    }
+
+    // --- 設定ドロワートグル ---
+    function toggleSettingsDrawer(e) {
+      if (e) e.stopPropagation();
+      const drawer = document.getElementById('settings-drawer');
+      const btn = document.getElementById('settings-btn');
+      drawer.classList.toggle('active');
+      btn.classList.toggle('active');
+    }
+
+    // --- カラー変更 ---
+    function setColor(target, hex) {
+      if (target === 'A') {
+        colorA = hex;
+        document.querySelectorAll('#color-row-a .color-dot').forEach(d => {
+          d.classList.toggle('active', d.style.backgroundColor === hex || rgbToHex(d.style.backgroundColor) === hex);
+        });
+        document.getElementById('wave-tag-a').style.color = hex;
+        document.getElementById('valA').style.color = hex;
+      } else {
+        colorB = hex;
+        document.querySelectorAll('#color-row-b .color-dot').forEach(d => {
+          d.classList.toggle('active', d.style.backgroundColor === hex || rgbToHex(d.style.backgroundColor) === hex);
+        });
+        document.getElementById('wave-tag-b').style.color = hex;
+        document.getElementById('valB').style.color = hex;
+      }
+      renderFrame();
+    }
+    function rgbToHex(rgb) {
+      if (rgb.startsWith('#')) return rgb;
+      const rgbValues = rgb.match(/\d+/g);
+      if (!rgbValues) return rgb;
+      return '#' + rgbValues.slice(0,3).map(x => parseInt(x).toString(16).padStart(2, '0')).join('').toUpperCase();
+    }
+
+    // --- 速度設定 (0.1x〜2.0x 倍速) ---
+    function setSpeed(target, val) {
+      const num = parseFloat(val);
+      if (target === 'A') {
+        speedA = num;
+        document.getElementById('speed-label-a').innerText = `${num.toFixed(2)}x`;
+      } else {
+        speedB = num;
+        document.getElementById('speed-label-b').innerText = `${num.toFixed(2)}x`;
+      }
+    }
+
+    // --- ファイル名表示トグル ---
+    function toggleFileName(target, e) {
+      if (e) e.stopPropagation();
+      const name = target === 'A' ? '20261015_秋季大会_走幅跳_決勝.mp4' : '20261102_県選手権_走幅跳_3回目.mp4';
+      alert(`ファイル名 [動画${target}]:\n${name}`);
+    }
 
     // --- UIトグル (ワンタップ全画面没入) ---
     function toggleAllUI(e) {
@@ -458,12 +728,16 @@
       isUiVisible = !isUiVisible;
       document.getElementById('top-bar').classList.toggle('hidden-ui', !isUiVisible);
       document.getElementById('floating-pill-hud').classList.toggle('hidden-ui', !isUiVisible);
-      document.getElementById('viewport-container').classList.toggle('hidden-ui', !isUiVisible);
+      document.getElementById('seekbar-panel-a').classList.toggle('hidden-ui', !isUiVisible);
+      document.getElementById('seekbar-panel-b').classList.toggle('hidden-ui', !isUiVisible);
+      document.getElementById('settings-drawer').classList.remove('active');
+      document.getElementById('settings-btn').classList.remove('active');
     }
 
     function onViewportClick(e) {
-      // ボタンや波形エリアをクリックした時は没入トグルを発動させない
-      if (e.target.closest('#floating-pill-hud') || e.target.closest('.individual-ctrl-bar') || e.target.closest('.wave-overlay-layer') || e.target.closest('#top-bar')) {
+      if (e.target.closest('#floating-pill-hud') || e.target.closest('.individual-ctrl-bar') ||
+          e.target.closest('.video-seekbar-panel') || e.target.closest('#top-bar') ||
+          e.target.closest('#settings-drawer') || e.target.closest('.file-badge')) {
         return;
       }
       toggleAllUI();
@@ -473,27 +747,9 @@
     function togglePlay(e) {
       if (e) e.stopPropagation();
       isPlaying = !isPlaying;
+      document.body.classList.toggle('is-playing', isPlaying);
       document.getElementById('play-icon').innerText = isPlaying ? '❚❚' : '▶';
       document.getElementById('play-btn').innerHTML = isPlaying ? '<span id="play-icon">❚❚</span> 一時停止' : '<span id="play-icon">▶</span> 再生';
-    }
-
-    // --- 左右同期コマ送り ---
-    function stepDual(ms, e) {
-      if (e) e.stopPropagation();
-      if (isPlaying) togglePlay();
-      timeA = Math.max(0, Math.min(totalMs, timeA + ms));
-      renderFrame();
-    }
-
-    // --- 個別単独コマ送り (頭出し用) ---
-    function stepSingle(target, ms) {
-      if (isPlaying) togglePlay();
-      if (target === 'A') {
-        timeA = Math.max(0, Math.min(totalMs, timeA + ms));
-      } else {
-        manualOffsetMs += ms;
-      }
-      renderFrame();
     }
 
     // --- 同期ロック ⇄ 個別調整トグル ---
@@ -508,12 +764,15 @@
       const indB = document.getElementById('ind-ctrl-b');
 
       if (isSyncLocked) {
+        // ロックONした瞬間に、現在のズレ (timeB - timeA) を固定記憶！
+        syncOffsetMs = timeB - timeA;
         btn.className = 'pill-btn lock-active';
         icon.innerText = '🔒';
-        text.innerText = '同期ロック中';
+        text.innerText = '同期中';
         indA.classList.remove('active');
         indB.classList.remove('active');
       } else {
+        // アンロック時は左右完全に独立操作可能に
         btn.className = 'pill-btn unlock-active';
         icon.innerText = '🔓';
         text.innerText = '個別頭出し中';
@@ -522,23 +781,51 @@
       }
     }
 
+    // --- 左右同期コマ送り ---
+    function stepDual(ms, e) {
+      if (e) e.stopPropagation();
+      if (isPlaying) togglePlay();
+      timeA = Math.max(0, Math.min(totalMs, timeA + ms));
+      timeB = Math.max(0, Math.min(totalMs, timeB + ms));
+      renderFrame();
+    }
+
+    // --- 個別単独コマ送り (左を動かしても右は絶対に動かない！) ---
+    function stepSingle(target, ms) {
+      if (isPlaying) togglePlay();
+      if (target === 'A') {
+        timeA = Math.max(0, Math.min(totalMs, timeA + ms));
+      } else {
+        timeB = Math.max(0, Math.min(totalMs, timeB + ms));
+      }
+      renderFrame();
+    }
+
+    // --- 各動画専用シークバー操作 ---
+    function onSeekSingle(target, val) {
+      const ms = parseInt(val);
+      if (target === 'A') {
+        timeA = ms;
+        if (isSyncLocked) timeB = Math.max(0, Math.min(totalMs, timeA + syncOffsetMs));
+      } else {
+        timeB = ms;
+        if (isSyncLocked) timeA = Math.max(0, Math.min(totalMs, timeB - syncOffsetMs));
+      }
+      renderFrame();
+    }
+
     function adjustOffset(ms, e) {
       if (e) e.stopPropagation();
-      manualOffsetMs += ms;
+      timeB = Math.max(0, Math.min(totalMs, timeB + ms));
+      syncOffsetMs = timeB - timeA;
       renderFrame();
     }
 
     function resetSync() {
-      manualOffsetMs = 0;
       timeA = 3200;
+      timeB = 3200;
+      syncOffsetMs = 0;
       renderFrame();
-    }
-
-    function togglePlaySpeed() {
-      const speeds = [0.1, 0.25, 0.5, 1.0];
-      const idx = speeds.indexOf(playbackSpeed);
-      playbackSpeed = speeds[(idx + 1) % speeds.length];
-      document.getElementById('speed-label').innerText = `${playbackSpeed}x`;
     }
 
     // --- 波形ダイレクトドラッグシーク ---
@@ -548,7 +835,9 @@
 
       const vp = document.getElementById('viewport-container');
       vp.addEventListener('mousedown', e => {
-        if (e.target.closest('#floating-pill-hud') || e.target.closest('.individual-ctrl-bar') || e.target.closest('#top-bar')) return;
+        if (e.target.closest('#floating-pill-hud') || e.target.closest('.individual-ctrl-bar') ||
+            e.target.closest('.video-seekbar-panel') || e.target.closest('#top-bar') ||
+            e.target.closest('#settings-drawer')) return;
         isDragging = true;
         startX = e.clientX;
       });
@@ -558,7 +847,9 @@
         const dx = e.clientX - startX;
         if (Math.abs(dx) > 4) {
           if (isPlaying) togglePlay();
-          timeA = Math.max(0, Math.min(totalMs, timeA + (dx > 0 ? 33 : -33)));
+          const dt = dx > 0 ? 33 : -33;
+          timeA = Math.max(0, Math.min(totalMs, timeA + dt));
+          timeB = Math.max(0, Math.min(totalMs, timeB + dt));
           startX = e.clientX;
           renderFrame();
         }
@@ -567,18 +858,29 @@
       window.addEventListener('mouseup', () => { isDragging = false; });
     }
 
-    // --- センサー波形計算 (加速度G) ---
-    function getGA(tMs) {
+    // --- センサー波形計算 (加速度G・角速度・角度) ---
+    function calcSensorMetrics(tMs, isB) {
       const t = tMs / 1000;
-      const p = t * 3.4;
+      const factor = isB ? 1.05 : 1.0;
+      const p = t * (isB ? 3.5 : 3.4);
       const base = Math.sin(p);
-      return 1.1 + (base > 0 ? Math.pow(base, 2) * 0.75 : base * 0.3 * 0.75);
-    }
-    function getGB(tMs) {
-      const t = tMs / 1000;
-      const p = t * 3.5;
-      const base = Math.sin(p);
-      return 1.1 + (base > 0 ? Math.pow(base, 2.3) * 1.17 : base * 0.25 * 1.17);
+
+      // 加速度
+      const ax = Math.sin(p) * 1.5 * factor;
+      const ay = Math.cos(p) * 0.9 * factor;
+      const az = 1.0 + (base > 0 ? Math.pow(base, isB ? 2.3 : 2.0) * (isB ? 1.4 : 1.0) : base * 0.3);
+      const totalG = Math.sqrt(ax * ax + ay * ay + az * az);
+
+      // 角速度
+      const gx = Math.cos(p) * 280 * factor;
+      const gy = Math.sin(p * 1.2) * 200 * factor;
+      const gz = Math.cos(p * 0.8) * 150 * factor;
+      const totalGyr = Math.sqrt(gx * gx + gy * gy + gz * gz);
+
+      // 角度
+      const totalAng = Math.sqrt(Math.pow(Math.sin(t) * 35, 2) + Math.pow(Math.cos(t * 1.2) * 25, 2));
+
+      return { ax, ay, az, totalG, gx, gy, gz, totalGyr, totalAng };
     }
 
     // --- 動画映像描画 (ランナー動作シミュレーション) ---
@@ -654,7 +956,7 @@
       ctx.lineTo(k2x + Math.sin(leg2 - 0.35) * 20, k2y + Math.cos(leg2 - 0.35) * 20);
       ctx.stroke();
 
-      // 接地インパクト円 (踏み込み瞬間エフェクト)
+      // 接地インパクト円
       if (bounce < 2.5) {
         ctx.strokeStyle = color;
         ctx.lineWidth = 2.0;
@@ -664,13 +966,13 @@
       }
     }
 
-    // --- 映像上ダイレクト波形描画 (透明オーバーレイ) ---
-    function drawDirectWaveOverlay(ctx, w, h, centerMs, color, gFunc) {
+    // --- 映像上ダイレクト波形描画 (複数選択対応) ---
+    function drawDirectWaveOverlay(ctx, w, h, centerMs, color, isB) {
       ctx.clearRect(0, 0, w, h);
 
       // ゼロ基準線
       const midY = h * 0.65;
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.18)';
       ctx.lineWidth = 1;
       ctx.setLineDash([2, 4]);
       ctx.beginPath();
@@ -678,28 +980,43 @@
       ctx.stroke();
       ctx.setLineDash([]);
 
-      // 波形ライン (発光調ネオン)
       const windowMs = 4000; // 前後±2.0秒 = 4000ms
-      const pts = 70;
-      ctx.strokeStyle = color;
-      ctx.lineWidth = 3.0;
-      ctx.shadowColor = color;
-      ctx.shadowBlur = 8;
-      ctx.beginPath();
+      const pts = 65;
 
-      for (let i = 0; i <= pts; i++) {
-        const frac = i / pts;
-        const curMs = (centerMs - 2000) + (frac * windowMs);
-        const g = gFunc(curMs);
-        const x = frac * w;
-        const y = Math.max(4, Math.min(h - 4, midY - ((g - 1.0) * (h * 0.55))));
-        if (i === 0) ctx.moveTo(x, y);
-        else ctx.lineTo(x, y);
-      }
-      ctx.stroke();
-      ctx.shadowBlur = 0; // リセット
+      const activeSeries = WAVE_SERIES.filter(s => s.selected);
+      if (activeSeries.length === 0) return;
 
-      // 中央 NOW マーカー (映像の上に浮かぶ垂直ライン)
+      activeSeries.forEach((series, sIdx) => {
+        ctx.strokeStyle = sIdx === 0 ? color : lightenColor(color, sIdx * 25);
+        ctx.lineWidth = series.id.includes('Total') ? 2.8 : 1.6;
+        ctx.shadowColor = color;
+        ctx.shadowBlur = sIdx === 0 ? 6 : 0;
+        ctx.beginPath();
+
+        for (let i = 0; i <= pts; i++) {
+          const frac = i / pts;
+          const curMs = (centerMs - 2000) + (frac * windowMs);
+          const metrics = calcSensorMetrics(curMs, isB);
+
+          let val = 0;
+          let scale = h * 0.5;
+          if (series.id === 'accTotal') { val = metrics.totalG - 1.0; scale = h * 0.55; }
+          else if (series.id === 'accX') { val = metrics.ax; scale = h * 0.4; }
+          else if (series.id === 'accY') { val = metrics.ay; scale = h * 0.4; }
+          else if (series.id === 'accZ') { val = metrics.az - 1.0; scale = h * 0.4; }
+          else if (series.id === 'gyrTotal') { val = metrics.totalGyr / 400; scale = h * 0.45; }
+          else if (series.id === 'angTotal') { val = metrics.totalAng / 50; scale = h * 0.45; }
+
+          const x = frac * w;
+          const y = Math.max(4, Math.min(h - 4, midY - (val * scale)));
+          if (i === 0) ctx.moveTo(x, y);
+          else ctx.lineTo(x, y);
+        }
+        ctx.stroke();
+        ctx.shadowBlur = 0;
+      });
+
+      // 中央 NOW マーカー (垂直ライン)
       const cx = w / 2;
       ctx.strokeStyle = '#EF4444';
       ctx.lineWidth = 2.0;
@@ -710,10 +1027,16 @@
       ctx.setLineDash([]);
 
       // NOW ドット
+      const curMetrics = calcSensorMetrics(centerMs, isB);
+      const curY = Math.max(4, Math.min(h - 4, midY - ((curMetrics.totalG - 1.0) * (h * 0.55))));
       ctx.fillStyle = '#EF4444';
       ctx.beginPath();
-      ctx.arc(cx, midY - ((gFunc(centerMs) - 1.0) * (h * 0.55)), 5, 0, Math.PI * 2);
+      ctx.arc(cx, curY, 5, 0, Math.PI * 2);
       ctx.fill();
+    }
+
+    function lightenColor(color, percent) {
+      return color; // シンプルに同じ色基調
     }
 
     // --- タイムコード整形 ---
@@ -727,29 +1050,28 @@
 
     // --- 全体フレーム描画 ---
     function renderFrame() {
-      // 1. 各動画の再生位置計算
-      const timeB = isSyncLocked ? Math.max(0, timeA + baseOffsetMs + manualOffsetMs) : Math.max(0, timeA + manualOffsetMs);
-
-      // 2. 左画面 (動画A ＋ その上に直接波形A)
-      drawRunner(ctxVA, cvA.width, cvA.height, timeA, '#00E5FF', false);
-      drawDirectWaveOverlay(ctxWA, cwA.width, cwA.height, timeA, '#00E5FF', getGA);
+      // 1. 左画面 (動画A ＋ その上に直接波形A)
+      drawRunner(ctxVA, cvA.width, cvA.height, timeA, colorA, false);
+      drawDirectWaveOverlay(ctxWA, cwA.width, cwA.height, timeA, colorA, false);
       document.getElementById('timeA').innerText = formatTime(timeA);
+      document.getElementById('seekA').value = timeA;
 
-      // 3. 右画面 (動画B ＋ その上に直接波形B)
-      drawRunner(ctxVB, cvB.width, cvB.height, timeB, '#FF7043', true);
-      drawDirectWaveOverlay(ctxWB, cwB.width, cwB.height, timeB, '#FF7043', getGB);
+      // 2. 右画面 (動画B ＋ その上に直接波形B)
+      drawRunner(ctxVB, cvB.width, cvB.height, timeB, colorB, true);
+      drawDirectWaveOverlay(ctxWB, cwB.width, cwB.height, timeB, colorB, true);
       document.getElementById('timeB').innerText = formatTime(timeB);
+      document.getElementById('seekB').value = timeB;
 
-      // 4. センサー数値更新
-      const ga = getGA(timeA);
-      const gb = getGB(timeB);
+      // 3. センサー数値更新
+      const ga = calcSensorMetrics(timeA, false).totalG;
+      const gb = calcSensorMetrics(timeB, true).totalG;
       document.getElementById('valA').innerText = `${ga.toFixed(2)} G`;
       document.getElementById('valB').innerText = `${gb.toFixed(2)} G`;
 
       const diff = gb - ga;
       const sign = diff >= 0 ? '+' : '';
       const diffBadge = document.getElementById('diff-badge');
-      diffBadge.innerText = `踏み込み差: ${sign}${diff.toFixed(2)}G (${diff >= 0 ? '今回大会が強力' : '過去大会が強力'})`;
+      diffBadge.innerText = `踏み込み差: ${sign}${diff.toFixed(2)}G (${diff >= 0 ? '動画Bが強力' : '動画Aが強力'})`;
     }
 
     // --- アニメーションループ ---
@@ -757,10 +1079,24 @@
     function animLoop(stamp) {
       if (isPlaying) {
         if (!lastStamp) lastStamp = stamp;
-        const delta = (stamp - lastStamp) * playbackSpeed;
+        const delta = stamp - lastStamp;
         lastStamp = stamp;
-        timeA += delta;
+
+        if (isSyncLocked) {
+          // 同期時はAの速度で一緒に進む
+          timeA += delta * speedA;
+          timeB = timeA + syncOffsetMs;
+        } else {
+          // 個別モード時は各動画の独立した速度で進む (片方倍速・片方スロー対応)
+          timeA += delta * speedA;
+          timeB += delta * speedB;
+        }
+
         if (timeA > totalMs) timeA = 0;
+        if (timeB > totalMs) timeB = 0;
+        if (timeA < 0) timeA = totalMs;
+        if (timeB < 0) timeB = totalMs;
+
         renderFrame();
       } else {
         lastStamp = 0;
