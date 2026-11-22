@@ -116,14 +116,18 @@
       width: 100%;
       height: 100%;
       z-index: 15;
-      pointer-events: none; /* 通常時は透過、ツール選択時にauto */
+      pointer-events: none;
     }
     #draw-canvas.drawing-active {
       pointer-events: auto;
       cursor: crosshair;
     }
+    #draw-canvas.selecting-active {
+      pointer-events: auto;
+      cursor: default;
+    }
 
-    /* タップでファイル名を表示するバッジ */
+    /* タップでファイル名を表示するバッジ (再生時は自動非表示) */
     .file-badge {
       position: absolute;
       top: 50px;
@@ -345,46 +349,128 @@
       font-weight: bold;
     }
 
-    /* ✏️ アノテーション描画ツールバー (画面左側にフローティング) */
-    #draw-toolbar {
+    /* ✏️ スマホ向け：通常は隠れていて、必要時に引き出すスライド描画メニュー */
+    #draw-toolbar-drawer {
       position: absolute;
-      top: 50%;
-      left: 12px;
-      transform: translateY(-50%);
-      background: rgba(18, 24, 34, 0.92);
-      backdrop-filter: blur(14px);
-      border: 1px solid rgba(0, 229, 255, 0.4);
-      border-radius: 12px;
-      padding: 8px 6px;
+      top: 50px;
+      left: 0;
+      bottom: 50px;
+      width: 260px;
+      background: rgba(16, 22, 32, 0.95);
+      backdrop-filter: blur(16px);
+      border-right: 1px solid rgba(0, 229, 255, 0.4);
+      border-radius: 0 14px 14px 0;
+      padding: 12px;
       display: flex;
       flex-direction: column;
-      gap: 6px;
-      z-index: 55;
-      box-shadow: 0 8px 30px rgba(0,0,0,0.8);
-      transition: opacity 0.3s, transform 0.3s;
+      gap: 12px;
+      z-index: 60;
+      box-shadow: 8px 0 35px rgba(0,0,0,0.8);
+      transform: translateX(-100%); /* 初期状態は画面外に完全収納！ */
+      transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
     }
-    #draw-toolbar.hidden-ui {
+    #draw-toolbar-drawer.open {
+      transform: translateX(0); /* 引き出し展開 */
+    }
+
+    /* 画面左端に常駐する極小「✏️」引き出しトリガータブ */
+    #draw-drawer-trigger {
+      position: absolute;
+      top: 50%;
+      left: 0;
+      transform: translateY(-50%);
+      width: 28px;
+      height: 48px;
+      background: rgba(0, 229, 255, 0.25);
+      backdrop-filter: blur(8px);
+      border: 1px solid rgba(0, 229, 255, 0.5);
+      border-left: none;
+      border-radius: 0 8px 8px 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #00E5FF;
+      font-size: 14px;
+      cursor: pointer;
+      z-index: 45;
+      box-shadow: 2px 0 10px rgba(0,0,0,0.5);
+      transition: background 0.2s, opacity 0.3s;
+    }
+    #draw-drawer-trigger:hover {
+      background: rgba(0, 229, 255, 0.5);
+    }
+    .hidden-ui #draw-drawer-trigger {
       opacity: 0;
-      transform: translateY(-50%) translateX(-25px);
       pointer-events: none;
+    }
+
+    /* 描画ツールボタングリッド */
+    .tools-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 6px;
     }
     .tool-icon-btn {
       background: rgba(255,255,255,0.08);
       border: 1px solid rgba(255,255,255,0.15);
       color: #fff;
       font-size: 11px;
-      padding: 6px 8px;
+      padding: 8px 4px;
       border-radius: 6px;
       cursor: pointer;
       display: flex;
       flex-direction: column;
       align-items: center;
-      gap: 2px;
-      min-width: 52px;
+      gap: 3px;
       transition: 0.15s;
     }
     .tool-icon-btn:hover { background: rgba(0,229,255,0.25); border-color: #00E5FF; }
     .tool-icon-btn.active { background: #FFD600; color: #000; font-weight: bold; border-color: #FFD600; }
+
+    /* プロパティ調整セクション (太さ・色・サイズ) */
+    .prop-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 11px;
+      color: #bbb;
+    }
+    .prop-btn-group {
+      display: flex;
+      gap: 4px;
+    }
+    .prop-pill {
+      background: rgba(255,255,255,0.08);
+      border: 1px solid rgba(255,255,255,0.18);
+      color: #fff;
+      font-size: 10px;
+      padding: 2px 7px;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    .prop-pill.active {
+      background: #00E5FF;
+      color: #000;
+      font-weight: bold;
+      border-color: #00E5FF;
+    }
+
+    /* カラーパレット行 */
+    .color-swatch-row {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+    .swatch-dot {
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      cursor: pointer;
+      border: 2px solid transparent;
+      transition: transform 0.15s;
+    }
+    .swatch-dot:hover { transform: scale(1.2); }
+    .swatch-dot.active { border-color: #fff; transform: scale(1.2); }
 
     /* 設定ドロワー / パネル */
     #settings-drawer {
@@ -515,32 +601,94 @@
     </div>
   </div>
 
-  <!-- ✏️ アノテーション描画ツールバー (左側フローティング) -->
-  <div id="draw-toolbar" onclick="event.stopPropagation()">
-    <button class="tool-icon-btn active" id="btn-tool-none" onclick="setDrawTool('none')">
-      <span>👆</span><span>通常</span>
-    </button>
-    <button class="tool-icon-btn" id="btn-tool-pen" onclick="setDrawTool('pen')">
-      <span>✏️</span><span>手書き</span>
-    </button>
-    <button class="tool-icon-btn" id="btn-tool-arrow" onclick="setDrawTool('arrow')">
-      <span>↗️</span><span>矢印線</span>
-    </button>
-    <button class="tool-icon-btn" id="btn-tool-circle" onclick="setDrawTool('circle')">
-      <span>⭕</span><span>円マーク</span>
-    </button>
-    <button class="tool-icon-btn" id="btn-tool-angle" onclick="setDrawTool('angle')">
-      <span>📐</span><span>3点角度</span>
-    </button>
-    <button class="tool-icon-btn" id="btn-tool-text" onclick="setDrawTool('text')">
-      <span>💬</span><span>文字入力</span>
-    </button>
-    <button class="tool-icon-btn" id="btn-tool-track" onclick="toggleAutoTrack()">
-      <span>🎯</span><span id="track-label">追尾:OFF</span>
-    </button>
-    <button class="tool-icon-btn" style="color:#FF5252;" onclick="clearDrawings()">
-      <span>🗑</span><span>クリア</span>
-    </button>
+  <!-- 画面左端の極小引き出しツマミ (スマホ向け: 通常時はこれだけ浮いている) -->
+  <div id="draw-drawer-trigger" onclick="toggleDrawDrawer(event)" title="描画ツールを引き出す">
+    <span>✏️</span>
+  </div>
+
+  <!-- ✏️ スライド引き出し式 アノテーション描画ツールバー (スマホ最適化) -->
+  <div id="draw-toolbar-drawer" onclick="event.stopPropagation()">
+    <div class="drawer-title">
+      <span>✏️ コーチング描画ツール</span>
+      <button class="prop-pill" style="color:#FF5252;" onclick="closeDrawDrawer()">◀ 隠す</button>
+    </div>
+
+    <!-- 1. ツール選択グリッド -->
+    <div>
+      <div class="section-label"><span>描画・選択ツール:</span></div>
+      <div class="tools-grid">
+        <button class="tool-icon-btn active" id="btn-tool-select" onclick="setDrawTool('select')">
+          <span>👆</span><span>選択/移動</span>
+        </button>
+        <button class="tool-icon-btn" id="btn-tool-pen" onclick="setDrawTool('pen')">
+          <span>✏️</span><span>手書き</span>
+        </button>
+        <button class="tool-icon-btn" id="btn-tool-arrow" onclick="setDrawTool('arrow')">
+          <span>↗️</span><span>矢印線</span>
+        </button>
+        <button class="tool-icon-btn" id="btn-tool-circle" onclick="setDrawTool('circle')">
+          <span>⭕</span><span>円マーク</span>
+        </button>
+        <button class="tool-icon-btn" id="btn-tool-angle" onclick="setDrawTool('angle')">
+          <span>📐</span><span>3点角度</span>
+        </button>
+        <button class="tool-icon-btn" id="btn-tool-text" onclick="setDrawTool('text')">
+          <span>💬</span><span>文字入力</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- 2. 線カラー選択 -->
+    <div>
+      <div class="section-label"><span>線の色 / 文字色:</span></div>
+      <div class="color-swatch-row" id="annotation-color-row">
+        <span class="swatch-dot active" style="background:#FFD600;" onclick="setDrawColor('#FFD600')"></span>
+        <span class="swatch-dot" style="background:#FF5252;" onclick="setDrawColor('#FF5252')"></span>
+        <span class="swatch-dot" style="background:#00E5FF;" onclick="setDrawColor('#00E5FF')"></span>
+        <span class="swatch-dot" style="background:#69F0AE;" onclick="setDrawColor('#69F0AE')"></span>
+        <span class="swatch-dot" style="background:#FFFFFF;" onclick="setDrawColor('#FFFFFF')"></span>
+      </div>
+    </div>
+
+    <!-- 3. 線の太さ調整 -->
+    <div class="prop-row">
+      <span>線の太さ:</span>
+      <div class="prop-btn-group">
+        <button class="prop-pill" id="width-2" onclick="setLineWidth(2)">細 2px</button>
+        <button class="prop-pill active" id="width-4" onclick="setLineWidth(4)">中 4px</button>
+        <button class="prop-pill" id="width-8" onclick="setLineWidth(8)">太 8px</button>
+      </div>
+    </div>
+
+    <!-- 4. 文字サイズ調整 -->
+    <div class="prop-row">
+      <span>文字サイズ:</span>
+      <div class="prop-btn-group">
+        <button class="prop-pill" id="fsize-12" onclick="setFontSize(12)">小 12</button>
+        <button class="prop-pill active" id="fsize-16" onclick="setFontSize(16)">中 16</button>
+        <button class="prop-pill" id="fsize-22" onclick="setFontSize(22)">大 22</button>
+      </div>
+    </div>
+
+    <!-- 5. 選択オブジェクトの操作 (サイズ変更・削除) -->
+    <div style="border-top:1px solid rgba(255,255,255,0.1); padding-top:8px;">
+      <div class="section-label"><span>選択中の図形/文字:</span></div>
+      <div style="display:flex; gap:6px;">
+        <button class="prop-pill" onclick="scaleSelected(1.2)" style="flex:1;">➕ 拡大</button>
+        <button class="prop-pill" onclick="scaleSelected(0.8)" style="flex:1;">➖ 縮小</button>
+        <button class="prop-pill" onclick="deleteSelected()" style="color:#FF5252; flex:1;">🗑 削除</button>
+      </div>
+    </div>
+
+    <!-- 6. 自動追尾 & 全消去 -->
+    <div style="display:flex; gap:6px; margin-top:auto;">
+      <button class="prop-pill" id="btn-tool-track" onclick="toggleAutoTrack()" style="flex:1; padding:6px 0;">
+        🎯 <span id="track-label">AI追尾:OFF</span>
+      </button>
+      <button class="prop-pill" style="color:#FF5252; flex:1; padding:6px 0;" onclick="clearDrawings()">
+        全消去
+      </button>
+    </div>
   </div>
 
   <!-- 設定ドロワー (全波形網羅・カラー変更・独立速度) -->
@@ -550,18 +698,14 @@
       <span style="cursor:pointer; color:#FF5252;" onclick="toggleSettingsDrawer(event)">✕ 閉じる</span>
     </div>
 
-    <!-- 1. 表示波形の選択 (全網羅) ＆ 項目別カラー変更 -->
     <div>
       <div class="section-label">
         <span>波形項目全リスト (全13系列):</span>
         <span style="font-size:9px; color:#aaa;">色丸タップで変更</span>
       </div>
-      <div id="wave-items-list">
-        <!-- JS動的生成 -->
-      </div>
+      <div id="wave-items-list"></div>
     </div>
 
-    <!-- 2. 動画ごとの再生速度スライダー (0.1x〜2.0x 倍速対応) -->
     <div style="border-top:1px solid rgba(255,255,255,0.1); padding-top:8px;">
       <div class="section-label">
         <span>動画A 速度: <span id="speed-label-a" style="color:#00E5FF; font-weight:bold;">0.25x</span></span>
@@ -592,7 +736,6 @@
 
     <!-- ================= 左画面: 動画 A ================= -->
     <div class="screen-half left-screen" id="screenA">
-      <!-- タップでファイル名を表示 (再生時は自動非表示) -->
       <div class="file-badge" id="fileBadgeA" onclick="toggleFileName('A', event)">
         <span id="fileNameA">📁 20261015_秋季大会_走幅跳_決勝.mp4</span>
       </div>
@@ -600,7 +743,6 @@
 
       <canvas id="canvas-video-a" class="video-canvas"></canvas>
 
-      <!-- 映像の真上に浮かび上がる波形オーバーレイ -->
       <div class="wave-overlay-layer" id="overlayA" title="ドラッグして直接シーク可能">
         <div class="wave-tag-row">
           <div class="wave-legend-group" id="legendA"></div>
@@ -609,13 +751,11 @@
         <canvas id="canvas-wave-a" class="wave-canvas"></canvas>
       </div>
 
-      <!-- 動画A専用シークバー -->
       <div class="video-seekbar-panel" id="seekbar-panel-a" onclick="event.stopPropagation()">
         <span style="font-size:10px; color:#00E5FF; font-weight:bold;">A</span>
         <input type="range" id="seekA" class="seek-slider" min="0" max="10000" value="3200" oninput="onSeekSingle('A', this.value)">
       </div>
 
-      <!-- 個別調整モード時の単独コマ送りバー -->
       <div class="individual-ctrl-bar" id="ind-ctrl-a" onclick="event.stopPropagation()">
         <span style="font-size:10px; color:#00E5FF; font-weight:bold;">動画A頭出し:</span>
         <button class="ind-btn" onclick="stepSingle('A', -33)">◀ 1コマ戻し</button>
@@ -625,7 +765,6 @@
 
     <!-- ================= 右画面: 動画 B ================= -->
     <div class="screen-half right-screen" id="screenB">
-      <!-- タップでファイル名を表示 (再生時は自動非表示) -->
       <div class="file-badge b" id="fileBadgeB" onclick="toggleFileName('B', event)">
         <span id="fileNameB">📁 20261102_県選手権_走幅跳_3回目.mp4</span>
       </div>
@@ -633,7 +772,6 @@
 
       <canvas id="canvas-video-b" class="video-canvas"></canvas>
 
-      <!-- 映像の真上に浮かび上がる波形オーバーレイ -->
       <div class="wave-overlay-layer" id="overlayB" title="ドラッグして直接シーク可能">
         <div class="wave-tag-row">
           <div class="wave-legend-group" id="legendB"></div>
@@ -642,13 +780,11 @@
         <canvas id="canvas-wave-b" class="wave-canvas"></canvas>
       </div>
 
-      <!-- 動画B専用シークバー -->
       <div class="video-seekbar-panel" id="seekbar-panel-b" onclick="event.stopPropagation()">
         <span style="font-size:10px; color:#FF7043; font-weight:bold;">B</span>
         <input type="range" id="seekB" class="seek-slider b" min="0" max="10000" value="3120" oninput="onSeekSingle('B', this.value)">
       </div>
 
-      <!-- 個別調整モード時の単独コマ送りバー -->
       <div class="individual-ctrl-bar" id="ind-ctrl-b" onclick="event.stopPropagation()">
         <span style="font-size:10px; color:#FF7043; font-weight:bold;">動画B頭出し:</span>
         <button class="ind-btn" onclick="stepSingle('B', -33)">◀ 1コマ戻し</button>
@@ -674,6 +810,10 @@
         1コマ ▶
       </button>
 
+      <button class="pill-btn" onclick="toggleDrawDrawer(event)" title="描画メニューを開く">
+        <span>✏️</span> 描画
+      </button>
+
       <div style="display:flex; gap:2px; margin-left:2px; border-left:1px solid rgba(255,255,255,0.15); padding-left:6px;">
         <button class="pill-btn" style="padding:4px 7px; font-size:10px;" onclick="adjustOffset(-10, event)" title="Bを0.01秒早める">-0.01s</button>
         <button class="pill-btn" style="padding:4px 7px; font-size:10px;" onclick="adjustOffset(10, event)" title="Bを0.01秒遅らせる">+0.01s</button>
@@ -697,10 +837,16 @@
     let speedA = 0.25;
     let speedB = 0.25;
 
-    // 描画ツール: 'none', 'pen', 'arrow', 'circle', 'angle', 'text'
-    let currentTool = 'none';
+    // 描画ツール: 'select', 'pen', 'arrow', 'circle', 'angle', 'text'
+    let currentTool = 'select';
     let drawColor = '#FFD600';
-    let annotations = []; // { type, points, text, angle, color }
+    let currentLineWidth = 4;
+    let currentFontSize = 16;
+
+    let annotations = []; // { id, type, points: [{x,y}], text, angle, color, lineWidth, fontSize }
+    let selectedAnnotation = null;
+    let isDraggingSelected = false;
+    let dragStartPt = null;
     let tempPoints = [];
 
     const PRESET_COLORS = [
@@ -708,7 +854,6 @@
       '#FF4081', '#7C4DFF', '#FF9100', '#FFFFFF'
     ];
 
-    // 全波形系列定義 (仕様書完全網羅)
     const WAVE_SERIES = [
       { id: 'accTotal', label: 'Acc 合成G (合算)', color: '#FFD740', selected: true },
       { id: 'accX',     label: 'Acc X軸 (前後)',   color: '#FF5252', selected: true },
@@ -763,44 +908,135 @@
       renderFrame();
     });
 
-    // --- アノテーション描画ツール選択 ---
+    // --- ✏️ スライド描画メニューの開閉 ---
+    function toggleDrawDrawer(e) {
+      if (e) e.stopPropagation();
+      document.getElementById('draw-toolbar-drawer').classList.toggle('open');
+    }
+    function closeDrawDrawer() {
+      document.getElementById('draw-toolbar-drawer').classList.remove('open');
+    }
+
+    // --- ツール選択 ---
     function setDrawTool(tool) {
       currentTool = tool;
       tempPoints = [];
-      document.querySelectorAll('.tool-icon-btn').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.tools-grid .tool-icon-btn').forEach(b => b.classList.remove('active'));
       const activeBtn = document.getElementById(`btn-tool-${tool}`);
       if (activeBtn) activeBtn.classList.add('active');
 
-      cd.classList.toggle('drawing-active', tool !== 'none');
+      cd.classList.toggle('drawing-active', tool !== 'select');
+      cd.classList.toggle('selecting-active', tool === 'select');
+      renderAnnotations();
+    }
+
+    // --- 色・太さ・文字サイズ設定 ---
+    function setDrawColor(color) {
+      drawColor = color;
+      document.querySelectorAll('#annotation-color-row .swatch-dot').forEach(d => {
+        d.classList.toggle('active', rgbToHex(d.style.backgroundColor) === color || d.style.backgroundColor === color);
+      });
+      // 選択中オブジェクトがあればその場で色変更！
+      if (selectedAnnotation) {
+        selectedAnnotation.color = color;
+        renderAnnotations();
+      }
+    }
+
+    function setLineWidth(w) {
+      currentLineWidth = w;
+      [2, 4, 8].forEach(v => {
+        document.getElementById(`width-${v}`).classList.toggle('active', v === w);
+      });
+      if (selectedAnnotation) {
+        selectedAnnotation.lineWidth = w;
+        renderAnnotations();
+      }
+    }
+
+    function setFontSize(size) {
+      currentFontSize = size;
+      [12, 16, 22].forEach(v => {
+        document.getElementById(`fsize-${v}`).classList.toggle('active', v === size);
+      });
+      if (selectedAnnotation && selectedAnnotation.type === 'text') {
+        selectedAnnotation.fontSize = size;
+        renderAnnotations();
+      }
+    }
+
+    // --- 選択オブジェクトの拡大・縮小・削除 ---
+    function scaleSelected(ratio) {
+      if (!selectedAnnotation) return;
+      if (selectedAnnotation.type === 'text') {
+        selectedAnnotation.fontSize = Math.max(10, Math.min(36, Math.round(selectedAnnotation.fontSize * ratio)));
+      } else {
+        // 重心を中心に拡大縮小
+        const pts = selectedAnnotation.points;
+        const cx = pts.reduce((sum, p) => sum + p.x, 0) / pts.length;
+        const cy = pts.reduce((sum, p) => sum + p.y, 0) / pts.length;
+        pts.forEach(p => {
+          p.x = cx + (p.x - cx) * ratio;
+          p.y = cy + (p.y - cy) * ratio;
+        });
+      }
+      renderAnnotations();
+    }
+
+    function deleteSelected() {
+      if (!selectedAnnotation) return;
+      annotations = annotations.filter(a => a !== selectedAnnotation);
+      selectedAnnotation = null;
+      renderAnnotations();
     }
 
     function clearDrawings() {
       annotations = [];
+      selectedAnnotation = null;
       tempPoints = [];
       renderAnnotations();
     }
 
     function toggleAutoTrack() {
       isAutoTracking = !isAutoTracking;
-      document.getElementById('track-label').innerText = isAutoTracking ? '追尾:ON' : '追尾:OFF';
+      document.getElementById('track-label').innerText = isAutoTracking ? 'AI追尾:ON' : 'AI追尾:OFF';
       document.getElementById('btn-tool-track').classList.toggle('active', isAutoTracking);
       renderAnnotations();
     }
 
-    // --- 描画イベントリスナー ---
+    // --- キャンバス描画 ＆ オブジェクト移動・リサイズイベント ---
     function initCanvasDrawEvents() {
       let isDrawing = false;
 
       cd.addEventListener('mousedown', e => {
-        if (currentTool === 'none') return;
         const rect = cd.getBoundingClientRect();
         const pt = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+
+        if (currentTool === 'select') {
+          // オブジェクトの選択判定 (ヒットテスト)
+          selectedAnnotation = findHitAnnotation(pt);
+          if (selectedAnnotation) {
+            isDraggingSelected = true;
+            dragStartPt = pt;
+          }
+          renderAnnotations();
+          return;
+        }
 
         if (currentTool === 'angle') {
           tempPoints.push(pt);
           if (tempPoints.length === 3) {
             const angle = calcAngle(tempPoints[0], tempPoints[1], tempPoints[2]);
-            annotations.push({ type: 'angle', points: [...tempPoints], angle, color: drawColor });
+            const newObj = {
+              id: Date.now(),
+              type: 'angle',
+              points: [...tempPoints],
+              angle,
+              color: drawColor,
+              lineWidth: currentLineWidth
+            };
+            annotations.push(newObj);
+            selectedAnnotation = newObj;
             tempPoints = [];
           }
           renderAnnotations();
@@ -808,9 +1044,18 @@
         }
 
         if (currentTool === 'text') {
-          const text = prompt('選手への指導コメント・指示を入力してください:', 'ここで前傾姿勢キープ！');
+          const text = prompt('選手への指導コメント・指示を入力してください:', 'ここで前傾キープ！');
           if (text) {
-            annotations.push({ type: 'text', points: [pt], text, color: '#FFD600' });
+            const newObj = {
+              id: Date.now(),
+              type: 'text',
+              points: [pt],
+              text,
+              color: drawColor,
+              fontSize: currentFontSize
+            };
+            annotations.push(newObj);
+            selectedAnnotation = newObj;
             renderAnnotations();
           }
           return;
@@ -821,26 +1066,66 @@
       });
 
       cd.addEventListener('mousemove', e => {
-        if (!isDrawing) return;
         const rect = cd.getBoundingClientRect();
         const pt = { x: e.clientX - rect.left, y: e.clientY - rect.top };
 
+        // 選択中オブジェクトのドラッグ移動
+        if (isDraggingSelected && selectedAnnotation) {
+          const dx = pt.x - dragStartPt.x;
+          const dy = pt.y - dragStartPt.y;
+          selectedAnnotation.points.forEach(p => {
+            p.x += dx;
+            p.y += dy;
+          });
+          dragStartPt = pt;
+          renderAnnotations();
+          return;
+        }
+
+        if (!isDrawing) return;
         if (currentTool === 'pen') {
           tempPoints.push(pt);
         } else {
-          tempPoints[1] = pt; // 直線や円の終点
+          tempPoints[1] = pt;
         }
         renderAnnotations();
       });
 
       window.addEventListener('mouseup', () => {
+        if (isDraggingSelected) {
+          isDraggingSelected = false;
+        }
         if (isDrawing && tempPoints.length > 1) {
-          annotations.push({ type: currentTool, points: [...tempPoints], color: drawColor });
+          const newObj = {
+            id: Date.now(),
+            type: currentTool,
+            points: [...tempPoints],
+            color: drawColor,
+            lineWidth: currentLineWidth
+          };
+          annotations.push(newObj);
+          selectedAnnotation = newObj;
           tempPoints = [];
         }
         isDrawing = false;
         renderAnnotations();
       });
+    }
+
+    // ヒットテスト (クリック位置にあるオブジェクトを探す)
+    function findHitAnnotation(pt) {
+      for (let i = annotations.length - 1; i >= 0; i--) {
+        const a = annotations[i];
+        if (a.type === 'text') {
+          const p = a.points[0];
+          if (Math.abs(pt.x - p.x) < 80 && Math.abs(pt.y - p.y) < 20) return a;
+        } else {
+          for (const p of a.points) {
+            if (Math.hypot(pt.x - p.x, pt.y - p.y) < 25) return a;
+          }
+        }
+      }
+      return null;
     }
 
     function calcAngle(pA, pB, pC) {
@@ -854,19 +1139,24 @@
       return (Math.acos(cosT) * (180 / Math.PI)).toFixed(1);
     }
 
+    // アノテーション描画
     function renderAnnotations() {
       ctxD.clearRect(0, 0, cd.width, cd.height);
 
-      // 1. 確定したオブジェクト描画
       const allObjs = [...annotations];
       if (tempPoints.length > 0) {
-        allObjs.push({ type: currentTool, points: tempPoints, color: drawColor });
+        allObjs.push({
+          type: currentTool,
+          points: tempPoints,
+          color: drawColor,
+          lineWidth: currentLineWidth
+        });
       }
 
       allObjs.forEach(obj => {
         ctxD.strokeStyle = obj.color;
         ctxD.fillStyle = obj.color;
-        ctxD.lineWidth = 3;
+        ctxD.lineWidth = obj.lineWidth || currentLineWidth;
         ctxD.lineCap = 'round';
 
         if (obj.type === 'pen' && obj.points.length > 1) {
@@ -912,25 +1202,64 @@
           }
         } else if (obj.type === 'text') {
           const p = obj.points[0];
-          ctxD.font = 'bold 13px sans-serif';
+          const fSize = obj.fontSize || currentFontSize;
+          ctxD.font = `bold ${fSize}px sans-serif`;
           const textW = ctxD.measureText(obj.text).width;
           ctxD.fillStyle = 'rgba(0,0,0,0.85)';
-          ctxD.fillRect(p.x - 4, p.y - 20, textW + 16, 26);
-          ctxD.strokeStyle = '#00E5FF';
-          ctxD.strokeRect(p.x - 4, p.y - 20, textW + 16, 26);
-          ctxD.fillStyle = '#00E5FF';
-          ctxD.fillText(obj.text, p.x + 4, p.y - 3);
+          ctxD.fillRect(p.x - 4, p.y - fSize - 4, textW + 16, fSize + 10);
+          ctxD.strokeStyle = obj.color;
+          ctxD.strokeRect(p.x - 4, p.y - fSize - 4, textW + 16, fSize + 10);
+          ctxD.fillStyle = obj.color;
+          ctxD.fillText(obj.text, p.x + 4, p.y - 4);
+        }
+
+        // 選択中のオブジェクトのハイライト枠描画
+        if (obj === selectedAnnotation) {
+          drawSelectionBox(obj);
         }
       });
 
-      // 2. AI自動追尾シミュレーション (ランナーの接地足・頭部に追従)
+      // AI自動追尾シミュレーション
       if (isAutoTracking) {
         const halfW = cd.width / 2;
-        // 左ランナー足先追尾
         drawAutoTracker(ctxD, halfW * 0.5, cd.height * 0.78, '#00E5FF', '足先 接地点');
-        // 右ランナー足先追尾
         drawAutoTracker(ctxD, halfW + (halfW * 0.5), cd.height * 0.78, '#FF7043', '足先 接地点');
       }
+    }
+
+    function drawSelectionBox(obj) {
+      ctxD.strokeStyle = '#00E5FF';
+      ctxD.lineWidth = 1.2;
+      ctxD.setLineDash([4, 4]);
+
+      let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+      obj.points.forEach(p => {
+        if (p.x < minX) minX = p.x;
+        if (p.x > maxX) maxX = p.x;
+        if (p.y < minY) minY = p.y;
+        if (p.y > maxY) maxY = p.y;
+      });
+
+      if (obj.type === 'text') {
+        const fSize = obj.fontSize || currentFontSize;
+        ctxD.font = `bold ${fSize}px sans-serif`;
+        const textW = ctxD.measureText(obj.text).width;
+        minX -= 6; maxX = minX + textW + 20;
+        minY -= fSize + 8; maxY = minY + fSize + 14;
+      } else {
+        minX -= 12; minY -= 12; maxX += 12; maxY += 12;
+      }
+
+      ctxD.strokeRect(minX, minY, maxX - minX, maxY - minY);
+      ctxD.setLineDash([]);
+
+      // 四隅のハンドル
+      ctxD.fillStyle = '#00E5FF';
+      const handleSize = 6;
+      ctxD.fillRect(minX - handleSize/2, minY - handleSize/2, handleSize, handleSize);
+      ctxD.fillRect(maxX - handleSize/2, minY - handleSize/2, handleSize, handleSize);
+      ctxD.fillRect(minX - handleSize/2, maxY - handleSize/2, handleSize, handleSize);
+      ctxD.fillRect(maxX - handleSize/2, maxY - handleSize/2, handleSize, handleSize);
     }
 
     function drawAutoTracker(ctx, cx, cy, color, label) {
@@ -952,7 +1281,6 @@
       ctx.fillText(label, cx - 24, cy + 38);
     }
 
-    // --- 🎥 フィードバック動画録画・書き出し ---
     function toggleRecording(e) {
       if (e) e.stopPropagation();
       isRecording = !isRecording;
@@ -966,14 +1294,13 @@
         alert('【選手フィードバック動画エクスポート完了】\n\n' +
               '・左右比較動画\n' +
               '・センサー加速度波形オーバーレイ\n' +
-              '・関節角度計測（📐）\n' +
-              '・指導コメントテキスト（💬）\n\n' +
+              '・移動＆サイズ変更した描画（線・円・角度・テキスト）\n\n' +
               'を重畳統合した高画質MP4動画（Feedback_Analysis_Export.mp4）を書き出しました！\n' +
               '選手へLINEやAirDropで即座に共有可能です。');
       }
     }
 
-    // --- 波形設定リストの動的生成 ---
+    // --- 波形設定リスト生成 ---
     function initWaveSettingsList() {
       const container = document.getElementById('wave-items-list');
       container.innerHTML = '';
@@ -1093,18 +1420,20 @@
       isUiVisible = !isUiVisible;
       document.getElementById('top-bar').classList.toggle('hidden-ui', !isUiVisible);
       document.getElementById('floating-pill-hud').classList.toggle('hidden-ui', !isUiVisible);
-      document.getElementById('draw-toolbar').classList.toggle('hidden-ui', !isUiVisible);
+      document.getElementById('draw-drawer-trigger').classList.toggle('hidden-ui', !isUiVisible);
       document.getElementById('seekbar-panel-a').classList.toggle('hidden-ui', !isUiVisible);
       document.getElementById('seekbar-panel-b').classList.toggle('hidden-ui', !isUiVisible);
       document.getElementById('settings-drawer').classList.remove('active');
       document.getElementById('settings-btn').classList.remove('active');
+      closeDrawDrawer();
     }
 
     function onViewportClick(e) {
       if (e.target.closest('#floating-pill-hud') || e.target.closest('.individual-ctrl-bar') ||
           e.target.closest('.video-seekbar-panel') || e.target.closest('#top-bar') ||
-          e.target.closest('#settings-drawer') || e.target.closest('#draw-toolbar') ||
-          e.target.closest('.file-badge') || currentTool !== 'none') {
+          e.target.closest('#settings-drawer') || e.target.closest('#draw-toolbar-drawer') ||
+          e.target.closest('#draw-drawer-trigger') || e.target.closest('.file-badge') ||
+          currentTool !== 'select') {
         return;
       }
       toggleAllUI();
@@ -1194,9 +1523,10 @@
 
       const vp = document.getElementById('viewport-container');
       vp.addEventListener('mousedown', e => {
-        if (currentTool !== 'none' || e.target.closest('#floating-pill-hud') || e.target.closest('.individual-ctrl-bar') ||
+        if (currentTool !== 'select' || e.target.closest('#floating-pill-hud') || e.target.closest('.individual-ctrl-bar') ||
             e.target.closest('.video-seekbar-panel') || e.target.closest('#top-bar') ||
-            e.target.closest('#settings-drawer') || e.target.closest('#draw-toolbar')) return;
+            e.target.closest('#settings-drawer') || e.target.closest('#draw-toolbar-drawer') ||
+            e.target.closest('#draw-drawer-trigger')) return;
         isDragging = true;
         startX = e.clientX;
       });
@@ -1419,6 +1749,13 @@
       diffBadge.innerText = `踏み込み差: ${sign}${diff.toFixed(2)}G (${diff >= 0 ? '動画Bが強力' : '動画Aが強力'})`;
 
       renderAnnotations();
+    }
+
+    function rgbToHex(rgb) {
+      if (!rgb || rgb.startsWith('#')) return rgb;
+      const rgbValues = rgb.match(/\d+/g);
+      if (!rgbValues) return rgb;
+      return '#' + rgbValues.slice(0,3).map(x => parseInt(x).toString(16).padStart(2, '0')).join('').toUpperCase();
     }
 
     let lastStamp = 0;
