@@ -1049,6 +1049,7 @@
 
         // 選択中オブジェクトのドラッグ移動
         if (isDraggingSelected && selectedAnnotation) {
+          cd.style.cursor = 'grabbing';
           const dx = pt.x - dragStartPt.x;
           const dy = pt.y - dragStartPt.y;
           selectedAnnotation.points.forEach(p => {
@@ -1058,6 +1059,12 @@
           dragStartPt = pt;
           renderAnnotations();
           return;
+        }
+
+        // 選択モード時、オブジェクトの上に重なったら手のひらカーソル(grab)に変化
+        if (currentTool === 'select') {
+          const hovered = findHitAnnotation(pt);
+          cd.style.cursor = hovered ? 'grab' : 'default';
         }
 
         if (!isPointerDown) return;
@@ -1144,16 +1151,66 @@
       cd.addEventListener('pointercancel', onPointerEnd);
     }
 
-    // ヒットテスト (クリック位置にあるオブジェクトを探す)
+    // --- 幾何計算ヘルパー（点と線分の最短距離） ---
+    function distToSegmentSquared(p, v, w) {
+      const l2 = (v.x - w.x)**2 + (v.y - w.y)**2;
+      if (l2 === 0) return (p.x - v.x)**2 + (p.y - v.y)**2;
+      let t = ((p.x - v.x) * (w.x - v.x) + (p.y - v.y) * (w.y - v.y)) / l2;
+      t = Math.max(0, Math.min(1, t));
+      return (p.x - (v.x + t * (w.x - v.x)))**2 + (p.y - (v.y + t * (w.y - v.y)))**2;
+    }
+    function distToSegment(p, v, w) {
+      return Math.sqrt(distToSegmentSquared(p, v, w));
+    }
+
+    // ヒットテスト (クリック・タップ位置にあるオブジェクトを正確に判定)
     function findHitAnnotation(pt) {
       for (let i = annotations.length - 1; i >= 0; i--) {
         const a = annotations[i];
-        if (a.type === 'text') {
-          const p = a.points[0];
-          if (Math.abs(pt.x - p.x) < 80 && Math.abs(pt.y - p.y) < 25) return a;
-        } else {
+
+        // 1. 円・楕円: 円の内部全体、および線のフチ(±15px)ならどこを押してもヒット！
+        if (a.type === 'circle' && a.points.length >= 2) {
+          const p1 = a.points[0], p2 = a.points[1];
+          const rx = Math.max(8, Math.abs(p2.x - p1.x));
+          const ry = Math.max(8, Math.abs(p2.y - p1.y));
+          // 判定マージンとして半径に+15pxのゆとり
+          const normDist = ((pt.x - p1.x) / (rx + 15))**2 + ((pt.y - p1.y) / (ry + 15))**2;
+          if (normDist <= 1.0) return a;
+        }
+
+        // 2. 矢印・直線: 線の上のどこを押してもヒット (線分距離 < 18px)
+        else if (a.type === 'arrow' && a.points.length >= 2) {
+          if (distToSegment(pt, a.points[0], a.points[1]) < 18) return a;
+        }
+
+        // 3. フリーハンドペン: 描いた線のどの部分を押してもヒット
+        else if (a.type === 'pen' && a.points.length > 0) {
+          if (a.points.length === 1) {
+            if (Math.hypot(pt.x - a.points[0].x, pt.y - a.points[0].y) < 25) return a;
+          } else {
+            for (let k = 0; k < a.points.length - 1; k++) {
+              if (distToSegment(pt, a.points[k], a.points[k+1]) < 16) return a;
+            }
+          }
+        }
+
+        // 4. 3点角度: 2本の線分の上、3頂点、または角度ラベルの上を押せばヒット
+        else if (a.type === 'angle' && a.points.length === 3) {
+          if (distToSegment(pt, a.points[0], a.points[1]) < 18 || distToSegment(pt, a.points[1], a.points[2]) < 18) return a;
           for (const p of a.points) {
-            if (Math.hypot(pt.x - p.x, pt.y - p.y) < 30) return a;
+            if (Math.hypot(pt.x - p.x, pt.y - p.y) < 22) return a;
+          }
+          const b = a.points[1];
+          if (pt.x >= b.x + 5 && pt.x <= b.x + 75 && pt.y >= b.y - 30 && pt.y <= b.y) return a;
+        }
+
+        // 5. テキスト: 文字プレートの内側ならどこでも確実にヒット
+        else if (a.type === 'text' && a.points.length > 0) {
+          const p = a.points[0];
+          ctxD.font = 'bold 15px sans-serif';
+          const textW = ctxD.measureText(a.text || '').width;
+          if (pt.x >= p.x - 10 && pt.x <= p.x + textW + 22 && pt.y >= p.y - 24 && pt.y <= p.y + 14) {
+            return a;
           }
         }
       }
@@ -1262,36 +1319,63 @@
     }
 
     function drawSelectionBox(obj) {
-      ctxD.strokeStyle = '#00E5FF';
-      ctxD.lineWidth = 1.5;
-      ctxD.setLineDash([4, 4]);
-
       let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-      obj.points.forEach(p => {
-        if (p.x < minX) minX = p.x;
-        if (p.x > maxX) maxX = p.x;
-        if (p.y < minY) minY = p.y;
-        if (p.y > maxY) maxY = p.y;
-      });
 
-      if (obj.type === 'text') {
+      if (obj.type === 'circle' && obj.points.length >= 2) {
+        const p1 = obj.points[0], p2 = obj.points[1];
+        const rx = Math.max(8, Math.abs(p2.x - p1.x));
+        const ry = Math.max(8, Math.abs(p2.y - p1.y));
+        minX = p1.x - rx - 8;
+        maxX = p1.x + rx + 8;
+        minY = p1.y - ry - 8;
+        maxY = p1.y + ry + 8;
+      } else if (obj.type === 'text') {
+        const p = obj.points[0];
         ctxD.font = 'bold 15px sans-serif';
-        const textW = ctxD.measureText(obj.text).width;
-        minX -= 6; maxX = minX + textW + 20;
-        minY -= 20; maxY = minY + 30;
+        const textW = ctxD.measureText(obj.text || '').width;
+        minX = p.x - 8;
+        maxX = p.x + textW + 18;
+        minY = p.y - 22;
+        maxY = p.y + 12;
       } else {
+        obj.points.forEach(p => {
+          if (p.x < minX) minX = p.x;
+          if (p.x > maxX) maxX = p.x;
+          if (p.y < minY) minY = p.y;
+          if (p.y > maxY) maxY = p.y;
+        });
         minX -= 12; minY -= 12; maxX += 12; maxY += 12;
       }
 
-      ctxD.strokeRect(minX, minY, maxX - minX, maxY - minY);
+      const w = maxX - minX;
+      const h = maxY - minY;
+
+      // 1. 選択中オブジェクトの内側を半透明ハイライト（視覚的一体感）
+      ctxD.fillStyle = 'rgba(0, 229, 255, 0.12)';
+      ctxD.fillRect(minX, minY, w, h);
+
+      // 2. 破線の選択ボーダー
+      ctxD.strokeStyle = '#00E5FF';
+      ctxD.lineWidth = 1.8;
+      ctxD.setLineDash([5, 4]);
+      ctxD.strokeRect(minX, minY, w, h);
       ctxD.setLineDash([]);
 
+      // 3. 四隅の操作ハンドル（白フチ付きアクアブルー）
       ctxD.fillStyle = '#00E5FF';
-      const handleSize = 6;
-      ctxD.fillRect(minX - handleSize/2, minY - handleSize/2, handleSize, handleSize);
-      ctxD.fillRect(maxX - handleSize/2, minY - handleSize/2, handleSize, handleSize);
-      ctxD.fillRect(minX - handleSize/2, maxY - handleSize/2, handleSize, handleSize);
-      ctxD.fillRect(maxX - handleSize/2, maxY - handleSize/2, handleSize, handleSize);
+      ctxD.strokeStyle = '#FFFFFF';
+      ctxD.lineWidth = 1.5;
+      const handleSize = 8;
+      const corners = [
+        { x: minX, y: minY },
+        { x: maxX, y: minY },
+        { x: minX, y: maxY },
+        { x: maxX, y: maxY }
+      ];
+      corners.forEach(c => {
+        ctxD.fillRect(c.x - handleSize/2, c.y - handleSize/2, handleSize, handleSize);
+        ctxD.strokeRect(c.x - handleSize/2, c.y - handleSize/2, handleSize, handleSize);
+      });
     }
 
     // --- 🎥 フィードバック動画録画・書き出し ---
