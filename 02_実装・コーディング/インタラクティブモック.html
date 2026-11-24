@@ -114,6 +114,7 @@
       z-index: 15;
       cursor: default;
       pointer-events: auto; /* 常時イベントを拾う */
+      touch-action: none;   /* スマホのタッチ・スワイプによるキャンセルを防止 */
     }
 
     /* タップでファイル名を表示するバッジ (再生時は自動非表示) */
@@ -323,26 +324,34 @@
     }
 
     /* ======================================================== */
-    /* 参考画像に基づく「右端スリム縦型ツールバー」（幅48px）     */
+    /* 参考画像に基づく「右端スリム縦型ツールバー」（幅46px・最適化） */
     /* ======================================================== */
     #right-slender-bar {
       position: absolute;
-      top: 50px;
-      right: 8px;
-      width: 48px;
-      background: rgba(15, 20, 28, 0.88);
-      backdrop-filter: blur(12px);
-      -webkit-backdrop-filter: blur(12px);
-      border: 1px solid rgba(255, 255, 255, 0.2);
-      border-radius: 24px;
-      padding: 8px 0;
+      top: 42px;
+      right: 6px;
+      width: 46px;
+      max-height: calc(100vh - 48px);
+      overflow-y: auto;
+      overflow-x: hidden;
+      scrollbar-width: none; /* スクロールバーは極力隠す */
+      -ms-overflow-style: none;
+      background: rgba(15, 20, 28, 0.92);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+      border: 1px solid rgba(255, 255, 255, 0.22);
+      border-radius: 23px;
+      padding: 6px 0;
       display: flex;
       flex-direction: column;
       align-items: center;
-      gap: 6px;
+      gap: 3px;
       z-index: 50;
-      box-shadow: 0 4px 24px rgba(0,0,0,0.7);
+      box-shadow: 0 4px 24px rgba(0,0,0,0.75);
       transition: transform 0.25s ease, opacity 0.25s ease;
+    }
+    #right-slender-bar::-webkit-scrollbar {
+      display: none;
     }
     #right-slender-bar.collapsed {
       transform: translateX(60px); /* 画面外へ最小化 */
@@ -351,13 +360,13 @@
     /* 右端に常駐する最小化復元トグルタブ */
     #slender-bar-toggle {
       position: absolute;
-      top: 50px;
+      top: 45px;
       right: 0;
       width: 22px;
       height: 38px;
-      background: rgba(0, 229, 255, 0.3);
+      background: rgba(0, 229, 255, 0.35);
       backdrop-filter: blur(8px);
-      border: 1px solid rgba(0, 229, 255, 0.6);
+      border: 1px solid rgba(0, 229, 255, 0.7);
       border-right: none;
       border-radius: 8px 0 0 8px;
       display: none;
@@ -373,8 +382,8 @@
     }
 
     .tool-btn-icon {
-      width: 36px;
-      height: 36px;
+      width: 33px;
+      height: 33px;
       border-radius: 50%;
       background: transparent;
       border: 1px solid transparent;
@@ -386,9 +395,10 @@
       cursor: pointer;
       transition: 0.15s;
       position: relative;
+      flex-shrink: 0;
     }
     .tool-btn-icon:hover {
-      background: rgba(255,255,255,0.15);
+      background: rgba(255,255,255,0.18);
       border-color: rgba(255,255,255,0.3);
     }
     .tool-btn-icon.active {
@@ -396,18 +406,52 @@
       color: #000;
       font-weight: bold;
       border-color: #00E5FF;
-      box-shadow: 0 0 10px rgba(0,229,255,0.6);
+      box-shadow: 0 0 10px rgba(0,229,255,0.7);
+    }
+    /* 選択中のオブジェクトがあるときのゴミ箱の強調表示 */
+    .tool-btn-icon.danger.has-selection {
+      background: #FF5252;
+      color: #fff;
+      border-color: #FF1744;
+      animation: pulse-trash 1.5s infinite;
+    }
+    @keyframes pulse-trash {
+      0%, 100% { box-shadow: 0 0 4px rgba(255,82,82,0.6); }
+      50% { box-shadow: 0 0 14px rgba(255,82,82,1); }
     }
     .tool-btn-icon.danger:hover {
-      background: rgba(255, 82, 82, 0.3);
+      background: rgba(255, 82, 82, 0.35);
       color: #FF5252;
     }
 
     .tool-divider {
-      width: 28px;
+      width: 26px;
       height: 1px;
       background: rgba(255,255,255,0.15);
-      margin: 2px 0;
+      margin: 1px 0;
+      flex-shrink: 0;
+    }
+
+    /* 指導テキスト入力用モーダル */
+    #text-input-dialog {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: rgba(18, 24, 34, 0.96);
+      backdrop-filter: blur(16px);
+      border: 1px solid rgba(0, 229, 255, 0.6);
+      border-radius: 12px;
+      padding: 14px;
+      display: none;
+      flex-direction: column;
+      gap: 10px;
+      z-index: 100;
+      box-shadow: 0 10px 40px rgba(0,0,0,0.85);
+      width: 280px;
+    }
+    #text-input-dialog.active {
+      display: flex;
     }
 
     /* カラー選択ポップオーバー (ツールバーの左側に展開) */
@@ -649,34 +693,49 @@
     </div>
 
     <!-- ======================================================== -->
-    <!-- 参考画像に基づく「画面右端のスリム縦型ツールバー」（幅48px） -->
+    <!-- 参考画像に基づく「画面右端のスリム縦型ツールバー」（幅46px・見切れ防止） -->
     <!-- ======================================================== -->
     <div id="right-slender-bar" onclick="event.stopPropagation()">
-      <!-- 最小化ボタン -->
-      <button class="tool-btn-icon" onclick="toggleSlenderBar()" title="ツールバーを隠す">
+      <!-- 1. 最小化トグル (最上部) -->
+      <button class="tool-btn-icon" onclick="toggleSlenderBar()" title="ツールバーを隠す/出す">
         <span style="font-size:11px;">▶</span>
+      </button>
+
+      <!-- 2. ヒストリ・管理群（参考画像準拠：横向きでも絶対に見切れない最上部へ配置） -->
+      <button class="tool-btn-icon danger" id="btn-trash-delete" onclick="deleteSelected()" title="選択した図形・文字を削除">
+        <span>🗑</span>
+      </button>
+
+      <button class="tool-btn-icon" onclick="undoAnnotation()" title="直前の描画を元に戻す">
+        <span>↩</span>
+      </button>
+
+      <!-- 🎨 カラー選択ボタン -->
+      <button class="tool-btn-icon" id="btn-color-pick" onclick="toggleColorPopover(event)" title="描画色を変更">
+        <span id="current-color-badge" style="display:inline-block; width:15px; height:15px; border-radius:50%; background:#FFD600; border:2px solid #fff;"></span>
       </button>
 
       <div class="tool-divider"></div>
 
+      <!-- 3. 図形・描画ツール群 -->
       <!-- 👆 選択・移動 -->
-      <button class="tool-btn-icon active" id="btn-tool-select" onclick="setDrawTool('select')" title="図形・文字を選択・移動">
+      <button class="tool-btn-icon" id="btn-tool-select" onclick="setDrawTool('select')" title="図形・文字を選択・移動">
         <span>👆</span>
+      </button>
+
+      <!-- ○ 円・楕円マーカー (ユーザー最優先ツール) -->
+      <button class="tool-btn-icon active" id="btn-tool-circle" onclick="setDrawTool('circle')" title="円・サークルを描く (タップで配置・ドラッグでサイズ調整)">
+        <span style="font-size:16px;">⭕</span>
+      </button>
+
+      <!-- ／ 直線・矢印 -->
+      <button class="tool-btn-icon" id="btn-tool-arrow" onclick="setDrawTool('arrow')" title="矢印ラインを描く (タップで配置・ドラッグで向き調整)">
+        <span>↗️</span>
       </button>
 
       <!-- 〰 フリーハンド手書き -->
       <button class="tool-btn-icon" id="btn-tool-pen" onclick="setDrawTool('pen')" title="フリーハンド線を描く">
-        <span style="font-size:16px;">✏️</span>
-      </button>
-
-      <!-- ／ 直線・矢印 -->
-      <button class="tool-btn-icon" id="btn-tool-arrow" onclick="setDrawTool('arrow')" title="矢印ラインを描く">
-        <span>↗️</span>
-      </button>
-
-      <!-- ○ 円・楕円マーカー -->
-      <button class="tool-btn-icon" id="btn-tool-circle" onclick="setDrawTool('circle')" title="円・サークルを描く">
-        <span style="font-size:17px;">⭕</span>
+        <span style="font-size:15px;">✏️</span>
       </button>
 
       <!-- ∡ 3点角度計測 -->
@@ -687,23 +746,6 @@
       <!-- T 文字テキスト入力 -->
       <button class="tool-btn-icon" id="btn-tool-text" onclick="setDrawTool('text')" title="文字・指導コメントを入力">
         <span style="font-weight:bold; font-family:serif;">T</span>
-      </button>
-
-      <div class="tool-divider"></div>
-
-      <!-- 🎨 カラー選択ボタン -->
-      <button class="tool-btn-icon" id="btn-color-pick" onclick="toggleColorPopover(event)" title="色を変更">
-        <span id="current-color-badge" style="display:inline-block; width:16px; height:16px; border-radius:50%; background:#FFD600; border:2px solid #fff;"></span>
-      </button>
-
-      <!-- ↩ Undo (元に戻す) -->
-      <button class="tool-btn-icon" onclick="undoAnnotation()" title="直前の描画を元に戻す">
-        <span>↩</span>
-      </button>
-
-      <!-- 🗑 選択したオブジェクトを削除 -->
-      <button class="tool-btn-icon danger" onclick="deleteSelected()" title="選択中の図形・文字を削除">
-        <span>🗑</span>
       </button>
     </div>
 
@@ -719,6 +761,19 @@
       <span class="pop-color-dot" style="background:#00E5FF;" onclick="selectDrawColor('#00E5FF')"></span>
       <span class="pop-color-dot" style="background:#69F0AE;" onclick="selectDrawColor('#69F0AE')"></span>
       <span class="pop-color-dot" style="background:#FFFFFF;" onclick="selectDrawColor('#FFFFFF')"></span>
+    </div>
+
+    <!-- 指導テキスト入力ダイアログ (モバイルでも確実に文字入力できるインラインUI) -->
+    <div id="text-input-dialog" onclick="event.stopPropagation()">
+      <div style="font-size:12px; font-weight:bold; color:#00E5FF; display:flex; justify-content:space-between; align-items:center;">
+        <span>💬 指導コメント・指示入力</span>
+        <span style="cursor:pointer; color:#aaa; font-size:16px; padding:2px 6px;" onclick="closeTextDialog()">✕</span>
+      </div>
+      <input type="text" id="coach-text-input" placeholder="例: ここで前傾キープ！" style="background:#0B0F17; border:1px solid rgba(0,229,255,0.4); color:#fff; padding:7px 10px; border-radius:6px; font-size:13px; outline:none;">
+      <div style="display:flex; justify-content:flex-end; gap:8px;">
+        <button class="pill-btn" onclick="closeTextDialog()">キャンセル</button>
+        <button class="pill-btn primary" onclick="submitTextDialog()">画面に配置</button>
+      </div>
     </div>
 
   </div>
@@ -737,8 +792,8 @@
     let speedA = 0.25;
     let speedB = 0.25;
 
-    // 描画ツール: 'select', 'pen', 'arrow', 'circle', 'angle', 'text'
-    let currentTool = 'select';
+    // 描画ツール: 初期値を 'circle' (⭕) に設定し、開いてすぐ描けるように改善
+    let currentTool = 'circle';
     let drawColor = '#FFD600';
     let currentLineWidth = 3.5;
 
@@ -747,6 +802,7 @@
     let isDraggingSelected = false;
     let dragStartPt = null;
     let tempPoints = [];
+    let pendingTextPt = null; // テキスト入力待機位置
 
     // 全波形系列定義
     const WAVE_SERIES = [
@@ -796,6 +852,7 @@
       initWaveSettingsList();
       resize();
       initCanvasDrawEvents();
+      setDrawTool('circle'); // 最初から円ツールを有効にして即座に描画可能に
       renderFrame();
     });
 
@@ -810,6 +867,10 @@
     function setDrawTool(tool) {
       currentTool = tool;
       tempPoints = [];
+      if (tool !== 'select') {
+        selectedAnnotation = null;
+        updateTrashBtnState();
+      }
       document.querySelectorAll('#right-slender-bar .tool-btn-icon').forEach(b => b.classList.remove('active'));
       const activeBtn = document.getElementById(`btn-tool-${tool}`);
       if (activeBtn) activeBtn.classList.add('active');
@@ -846,17 +907,30 @@
       }
     }
 
+    // ゴミ箱ボタンの強調表示連動
+    function updateTrashBtnState() {
+      const trashBtn = document.getElementById('btn-trash-delete');
+      if (trashBtn) {
+        if (selectedAnnotation) {
+          trashBtn.classList.add('has-selection');
+          trashBtn.title = '選択中の図形・文字を削除 (タップで削除)';
+        } else {
+          trashBtn.classList.remove('has-selection');
+          trashBtn.title = '図形・文字を削除 (直前のものを削除)';
+        }
+      }
+    }
+
     // --- 選択したオブジェクトの削除 ---
     function deleteSelected() {
       if (selectedAnnotation) {
         annotations = annotations.filter(a => a !== selectedAnnotation);
         selectedAnnotation = null;
-        renderAnnotations();
       } else if (annotations.length > 0) {
-        // 何も選択していない場合は末尾のものを削除
         annotations.pop();
-        renderAnnotations();
       }
+      updateTrashBtnState();
+      renderAnnotations();
     }
 
     // --- 元に戻す (Undo) ---
@@ -864,21 +938,69 @@
       if (annotations.length > 0) {
         annotations.pop();
         selectedAnnotation = null;
+        updateTrashBtnState();
         renderAnnotations();
       }
     }
 
-    // --- キャンバス描画イベント (バグを完全解消・確実に描けるロジック) ---
-    function initCanvasDrawEvents() {
-      let isMouseDown = false;
+    // --- 指導テキスト入力ダイアログ制御 ---
+    function openTextDialog(pt) {
+      pendingTextPt = pt;
+      const dlg = document.getElementById('text-input-dialog');
+      const input = document.getElementById('coach-text-input');
+      dlg.classList.add('active');
+      input.value = '';
+      setTimeout(() => input.focus(), 50);
+    }
 
-      cd.addEventListener('mousedown', e => {
+    function closeTextDialog() {
+      document.getElementById('text-input-dialog').classList.remove('active');
+      pendingTextPt = null;
+    }
+
+    function submitTextDialog() {
+      const input = document.getElementById('coach-text-input');
+      const text = input.value.trim() || 'ここで前傾キープ！';
+      if (pendingTextPt) {
+        const newObj = {
+          id: Date.now(),
+          type: 'text',
+          points: [pendingTextPt],
+          text: text,
+          color: drawColor,
+          fontSize: 16
+        };
+        annotations.push(newObj);
+        selectedAnnotation = newObj;
+        updateTrashBtnState();
+        renderAnnotations();
+      }
+      closeTextDialog();
+    }
+
+    // --- キャンバス描画イベント (Pointer Events + タップフォールバック完全対応) ---
+    function initCanvasDrawEvents() {
+      let isPointerDown = false;
+      let startPt = null;
+
+      // エンターキーでテキスト確定
+      const textInput = document.getElementById('coach-text-input');
+      if (textInput) {
+        textInput.addEventListener('keydown', e => {
+          if (e.key === 'Enter') submitTextDialog();
+        });
+      }
+
+      cd.addEventListener('pointerdown', e => {
+        e.preventDefault();
         const rect = cd.getBoundingClientRect();
         const pt = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+        startPt = pt;
 
         // 1. 選択モード時
         if (currentTool === 'select') {
           selectedAnnotation = findHitAnnotation(pt);
+          updateTrashBtnState();
           if (selectedAnnotation) {
             isDraggingSelected = true;
             dragStartPt = pt;
@@ -902,37 +1024,26 @@
             };
             annotations.push(newObj);
             selectedAnnotation = newObj;
+            updateTrashBtnState();
             tempPoints = [];
           }
           renderAnnotations();
           return;
         }
 
-        // 3. 文字入力モード時 (タップでダイアログ)
+        // 3. 文字入力モード時
         if (currentTool === 'text') {
-          const text = prompt('選手への指導コメント・指示を入力してください:', 'ここで前傾キープ！');
-          if (text) {
-            const newObj = {
-              id: Date.now(),
-              type: 'text',
-              points: [pt],
-              text,
-              color: drawColor,
-              fontSize: 16
-            };
-            annotations.push(newObj);
-            selectedAnnotation = newObj;
-            renderAnnotations();
-          }
+          openTextDialog(pt);
           return;
         }
 
-        // 4. フリーハンド線・矢印・円
-        isMouseDown = true;
+        // 4. 円・矢印・フリーハンドペン
+        isPointerDown = true;
         tempPoints = [pt];
+        try { cd.setPointerCapture(e.pointerId); } catch(err){}
       });
 
-      cd.addEventListener('mousemove', e => {
+      cd.addEventListener('pointermove', e => {
         const rect = cd.getBoundingClientRect();
         const pt = { x: e.clientX - rect.left, y: e.clientY - rect.top };
 
@@ -949,7 +1060,7 @@
           return;
         }
 
-        if (!isMouseDown) return;
+        if (!isPointerDown) return;
 
         if (currentTool === 'pen') {
           tempPoints.push(pt);
@@ -959,13 +1070,57 @@
         renderAnnotations();
       });
 
-      window.addEventListener('mouseup', () => {
+      const onPointerEnd = e => {
         if (isDraggingSelected) {
           isDraggingSelected = false;
         }
 
-        if (isMouseDown && tempPoints.length > 0) {
-          if (currentTool === 'pen' && tempPoints.length > 1) {
+        if (isPointerDown) {
+          const rect = cd.getBoundingClientRect();
+          const endPt = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+          const dist = Math.hypot(endPt.x - startPt.x, endPt.y - startPt.y);
+
+          // ⭕ 円ツール: タップ判定 (移動量 < 12px) なら半径35pxの円を即座に配置！ドラッグならそのサイズ
+          if (currentTool === 'circle') {
+            let p1 = startPt;
+            let p2 = endPt;
+            if (dist < 12) {
+              p2 = { x: p1.x + 35, y: p1.y + 35 };
+            }
+            const newObj = {
+              id: Date.now(),
+              type: 'circle',
+              points: [p1, p2],
+              color: drawColor,
+              lineWidth: currentLineWidth
+            };
+            annotations.push(newObj);
+            selectedAnnotation = newObj;
+            updateTrashBtnState();
+          }
+          // ↗️ 矢印ツール: タップ判定なら斜め上への矢印を即座に配置！ドラッグならその向き
+          else if (currentTool === 'arrow') {
+            let p1 = startPt;
+            let p2 = endPt;
+            if (dist < 12) {
+              p2 = { x: p1.x + 55, y: p1.y - 45 };
+            }
+            const newObj = {
+              id: Date.now(),
+              type: 'arrow',
+              points: [p1, p2],
+              color: drawColor,
+              lineWidth: currentLineWidth
+            };
+            annotations.push(newObj);
+            selectedAnnotation = newObj;
+            updateTrashBtnState();
+          }
+          // ✏️ ペンツール: タップなら目印ドットマーカー
+          else if (currentTool === 'pen') {
+            if (tempPoints.length <= 1) {
+              tempPoints.push({ x: startPt.x + 1, y: startPt.y + 1 });
+            }
             const newObj = {
               id: Date.now(),
               type: 'pen',
@@ -975,22 +1130,18 @@
             };
             annotations.push(newObj);
             selectedAnnotation = newObj;
-          } else if ((currentTool === 'arrow' || currentTool === 'circle') && tempPoints.length >= 2) {
-            const newObj = {
-              id: Date.now(),
-              type: currentTool,
-              points: [...tempPoints],
-              color: drawColor,
-              lineWidth: currentLineWidth
-            };
-            annotations.push(newObj);
-            selectedAnnotation = newObj;
+            updateTrashBtnState();
           }
+
           tempPoints = [];
-          isMouseDown = false;
+          isPointerDown = false;
+          try { cd.releasePointerCapture(e.pointerId); } catch(err){}
           renderAnnotations();
         }
-      });
+      };
+
+      cd.addEventListener('pointerup', onPointerEnd);
+      cd.addEventListener('pointercancel', onPointerEnd);
     }
 
     // ヒットテスト (クリック位置にあるオブジェクトを探す)
