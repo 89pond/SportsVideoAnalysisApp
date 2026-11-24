@@ -241,22 +241,22 @@
       accent-color: #FF7043;
     }
 
-    /* 個別調整モード（🔓）時の専用コマ送りバー */
+    /* 個別調整モード（🔓）時の専用操作バー（各動画の下部中央に配置） */
     .individual-ctrl-bar {
       position: absolute;
-      bottom: 165px;
+      bottom: 42px;
       left: 50%;
       transform: translateX(-50%);
-      background: rgba(15, 20, 28, 0.92);
-      backdrop-filter: blur(12px);
-      border: 1px solid rgba(255, 255, 255, 0.2);
+      background: rgba(15, 20, 28, 0.94);
+      backdrop-filter: blur(14px);
+      border: 1px solid rgba(255, 255, 255, 0.25);
       border-radius: 20px;
-      padding: 4px 10px;
+      padding: 3px 8px;
       display: none;
       align-items: center;
-      gap: 6px;
-      z-index: 30;
-      box-shadow: 0 4px 20px rgba(0,0,0,0.6);
+      gap: 5px;
+      z-index: 32;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.7);
     }
     .individual-ctrl-bar.active {
       display: flex;
@@ -265,12 +265,34 @@
       background: rgba(255,255,255,0.1);
       border: 1px solid rgba(255,255,255,0.2);
       color: #fff;
-      font-size: 11px;
-      padding: 4px 10px;
+      font-size: 10px;
+      padding: 3px 8px;
       border-radius: 12px;
       cursor: pointer;
+      white-space: nowrap;
     }
     .ind-btn:hover { background: rgba(0,229,255,0.3); border-color: #00E5FF; }
+    .ind-btn.play-single-btn {
+      background: rgba(0, 229, 255, 0.2);
+      border-color: #00E5FF;
+      color: #00E5FF;
+      font-weight: bold;
+    }
+    .ind-btn.play-single-btn.b {
+      background: rgba(255, 112, 67, 0.2);
+      border-color: #FF7043;
+      color: #FF7043;
+    }
+    .ind-btn.play-single-btn.active {
+      background: #00E5FF;
+      color: #000;
+      box-shadow: 0 0 10px rgba(0, 229, 255, 0.7);
+    }
+    .ind-btn.play-single-btn.b.active {
+      background: #FF7043;
+      color: #000;
+      box-shadow: 0 0 10px rgba(255, 112, 67, 0.7);
+    }
 
     /* 中央下部に浮かぶ「極小スリガラス調ピルHUD」 */
     #floating-pill-hud {
@@ -637,9 +659,12 @@
       </div>
 
       <div class="individual-ctrl-bar" id="ind-ctrl-a" onclick="event.stopPropagation()">
-        <span style="font-size:10px; color:#00E5FF; font-weight:bold;">動画A頭出し:</span>
-        <button class="ind-btn" onclick="stepSingle('A', -33)">◀ 1コマ戻し</button>
-        <button class="ind-btn" onclick="stepSingle('A', 33)">1コマ送り ▶</button>
+        <span style="font-size:10px; color:#00E5FF; font-weight:bold;">動画A:</span>
+        <button class="ind-btn play-single-btn" id="play-btn-a" onclick="togglePlaySingle('A', event)">▶ 再生</button>
+        <button class="ind-btn" onclick="stepSingle('A', -33)">◀ 1コマ</button>
+        <button class="ind-btn" onclick="stepSingle('A', 33)">1コマ ▶</button>
+        <button class="ind-btn" style="padding:3px 6px; font-size:10px;" onclick="stepSingle('A', -10)" title="0.01秒戻す">-0.01s</button>
+        <button class="ind-btn" style="padding:3px 6px; font-size:10px;" onclick="stepSingle('A', 10)" title="0.01秒進める">+0.01s</button>
       </div>
     </div>
 
@@ -666,9 +691,12 @@
       </div>
 
       <div class="individual-ctrl-bar" id="ind-ctrl-b" onclick="event.stopPropagation()">
-        <span style="font-size:10px; color:#FF7043; font-weight:bold;">動画B頭出し:</span>
-        <button class="ind-btn" onclick="stepSingle('B', -33)">◀ 1コマ戻し</button>
-        <button class="ind-btn" onclick="stepSingle('B', 33)">1コマ送り ▶</button>
+        <span style="font-size:10px; color:#FF7043; font-weight:bold;">動画B:</span>
+        <button class="ind-btn play-single-btn b" id="play-btn-b" onclick="togglePlaySingle('B', event)">▶ 再生</button>
+        <button class="ind-btn" onclick="stepSingle('B', -33)">◀ 1コマ</button>
+        <button class="ind-btn" onclick="stepSingle('B', 33)">1コマ ▶</button>
+        <button class="ind-btn" style="padding:3px 6px; font-size:10px;" onclick="stepSingle('B', -10)" title="0.01秒戻す">-0.01s</button>
+        <button class="ind-btn" style="padding:3px 6px; font-size:10px;" onclick="stepSingle('B', 10)" title="0.01秒進める">+0.01s</button>
       </div>
     </div>
 
@@ -686,9 +714,10 @@
 
       <button class="pill-btn" onclick="stepDual(33, event)">1コマ ▶</button>
 
-      <div style="display:flex; gap:2px; margin-left:2px; border-left:1px solid rgba(255,255,255,0.15); padding-left:6px;">
-        <button class="pill-btn" style="padding:4px 7px; font-size:10px;" onclick="adjustOffset(-10, event)">-0.01s</button>
-        <button class="pill-btn" style="padding:4px 7px; font-size:10px;" onclick="adjustOffset(10, event)">+0.01s</button>
+      <div style="display:flex; align-items:center; gap:2px; margin-left:2px; border-left:1px solid rgba(255,255,255,0.15); padding-left:6px;">
+        <span style="font-size:9px; color:#FF7043; font-weight:bold; margin-right:2px;">B差分:</span>
+        <button class="pill-btn" style="padding:4px 6px; font-size:10px;" onclick="adjustOffset(-10, event)" title="右動画(B)を0.01秒戻して差分微調整">-0.01s</button>
+        <button class="pill-btn" style="padding:4px 6px; font-size:10px;" onclick="adjustOffset(10, event)" title="右動画(B)を0.01秒進めて差分微調整">+0.01s</button>
       </div>
     </div>
 
@@ -781,6 +810,8 @@
   <script>
     // --- 状態管理 ---
     let isPlaying = true;
+    let isPlayingA = false; // 動画A 個別再生
+    let isPlayingB = false; // 動画B 個別再生
     let isSyncLocked = true;
     let isRecording = false;
 
@@ -1473,9 +1504,44 @@
     function togglePlay(e) {
       if (e) e.stopPropagation();
       isPlaying = !isPlaying;
+      if (!isSyncLocked) {
+        isPlayingA = isPlaying;
+        isPlayingB = isPlaying;
+        updateSinglePlayButtons();
+      }
       document.body.classList.toggle('is-playing', isPlaying);
       document.getElementById('play-icon').innerText = isPlaying ? '❚❚' : '▶';
       document.getElementById('play-btn').innerHTML = isPlaying ? '<span id="play-icon">❚❚</span> 一時停止' : '<span id="play-icon">▶</span> 再生';
+    }
+
+    // 片方の動画だけを個別再生・一時停止
+    function togglePlaySingle(target, e) {
+      if (e) e.stopPropagation();
+
+      // もし同期中なら自動的に個別頭出しモードに切り替える
+      if (isSyncLocked) {
+        toggleSyncLock();
+      }
+
+      if (target === 'A') {
+        isPlayingA = !isPlayingA;
+      } else {
+        isPlayingB = !isPlayingB;
+      }
+      updateSinglePlayButtons();
+    }
+
+    function updateSinglePlayButtons() {
+      const btnA = document.getElementById('play-btn-a');
+      const btnB = document.getElementById('play-btn-b');
+      if (btnA) {
+        btnA.innerText = isPlayingA ? '❚❚ 停止' : '▶ 再生';
+        btnA.classList.toggle('active', isPlayingA);
+      }
+      if (btnB) {
+        btnB.innerText = isPlayingB ? '❚❚ 停止' : '▶ 再生';
+        btnB.classList.toggle('active', isPlayingB);
+      }
     }
 
     function toggleSyncLock(e) {
@@ -1489,6 +1555,10 @@
       const indB = document.getElementById('ind-ctrl-b');
 
       if (isSyncLocked) {
+        // 同期ロック時: 個別再生を停止し、現在の時間差を固定して同期再生へ
+        isPlayingA = false;
+        isPlayingB = false;
+        updateSinglePlayButtons();
         syncOffsetMs = timeB - timeA;
         btn.className = 'pill-btn lock-active';
         icon.innerText = '🔒';
@@ -1496,11 +1566,13 @@
         indA.classList.remove('active');
         indB.classList.remove('active');
       } else {
+        // 個別頭出しモードへ切り替え
         btn.className = 'pill-btn unlock-active';
         icon.innerText = '🔓';
         text.innerText = '個別頭出し中';
         indA.classList.add('active');
         indB.classList.add('active');
+        updateSinglePlayButtons();
       }
     }
 
@@ -1513,12 +1585,19 @@
     }
 
     function stepSingle(target, ms) {
-      if (isPlaying) togglePlay();
+      if (isPlaying) {
+        isPlaying = false;
+        document.body.classList.remove('is-playing');
+        document.getElementById('play-btn').innerHTML = '<span id="play-icon">▶</span> 再生';
+      }
       if (target === 'A') {
+        isPlayingA = false;
         timeA = Math.max(0, Math.min(totalMs, timeA + ms));
       } else {
+        isPlayingB = false;
         timeB = Math.max(0, Math.min(totalMs, timeB + ms));
       }
+      updateSinglePlayButtons();
       renderFrame();
     }
 
@@ -1747,17 +1826,25 @@
 
     let lastStamp = 0;
     function animLoop(stamp) {
-      if (isPlaying) {
+      const anyPlaying = isPlaying || isPlayingA || isPlayingB;
+      if (anyPlaying) {
         if (!lastStamp) lastStamp = stamp;
         const delta = stamp - lastStamp;
         lastStamp = stamp;
 
         if (isSyncLocked) {
-          timeA += delta * speedA;
-          timeB = timeA + syncOffsetMs;
+          if (isPlaying) {
+            timeA += delta * speedA;
+            timeB = timeA + syncOffsetMs;
+          }
         } else {
-          timeA += delta * speedA;
-          timeB += delta * speedB;
+          // 同期解除時: 個別再生フラグまたは全体再生フラグで各動画を独立駆動
+          if (isPlaying || isPlayingA) {
+            timeA += delta * speedA;
+          }
+          if (isPlaying || isPlayingB) {
+            timeB += delta * speedB;
+          }
         }
 
         if (timeA > totalMs) timeA = 0;
